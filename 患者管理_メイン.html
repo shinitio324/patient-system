@@ -1,0 +1,1233 @@
+     1	<!DOCTYPE html>
+     2	<html lang="ja">
+     3	<head>
+     4	    <meta charset="UTF-8">
+     5	    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     6	    <title>患者情報管理システム</title>
+     7	    <script src="https://cdn.tailwindcss.com"></script>
+     8	    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+     9	    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    10	    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    11	    <style>
+    12	        body {
+    13	            font-family: 'Noto Sans JP', sans-serif;
+    14	        }
+    15	        .chart-container {
+    16	            position: relative;
+    17	            height: 400px;
+    18	        }
+    19	        .notification {
+    20	            position: fixed;
+    21	            top: 20px;
+    22	            right: 20px;
+    23	            z-index: 1000;
+    24	            min-width: 300px;
+    25	            animation: slideIn 0.3s ease-out;
+    26	        }
+    27	        @keyframes slideIn {
+    28	            from {
+    29	                transform: translateX(400px);
+    30	                opacity: 0;
+    31	            }
+    32	            to {
+    33	                transform: translateX(0);
+    34	                opacity: 1;
+    35	            }
+    36	        }
+    37	        .tab-content {
+    38	            display: none;
+    39	        }
+    40	        .tab-content.active {
+    41	            display: block;
+    42	        }
+    43	        .warning-red {
+    44	            background-color: #fee2e2;
+    45	            border-color: #ef4444;
+    46	        }
+    47	        .warning-text-red {
+    48	            color: #dc2626;
+    49	        }
+    50	    </style>
+    51	</head>
+    52	<body class="bg-gray-100">
+    53	    <!-- ログイン画面 -->
+    54	    <div id="loginScreen" class="fixed inset-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center z-50">
+    55	        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+    56	            <div class="text-center mb-8">
+    57	                <i class="fas fa-hospital-user text-blue-600 text-5xl mb-4"></i>
+    58	                <h1 class="text-3xl font-bold text-gray-800 mb-2">患者情報管理システム</h1>
+    59	                <p class="text-gray-600">ログインしてください</p>
+    60	            </div>
+    61	            
+    62	            <form id="loginForm" class="space-y-6">
+    63	                <div>
+    64	                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+    65	                        <i class="fas fa-lock mr-2"></i>パスワード
+    66	                    </label>
+    67	                    <input 
+    68	                        type="password" 
+    69	                        id="passwordInput" 
+    70	                        placeholder="パスワードを入力"
+    71	                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+    72	                        required
+    73	                        autofocus
+    74	                    >
+    75	                </div>
+    76	                
+    77	                <div id="loginError" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded">
+    78	                    <p class="text-red-700 text-sm">
+    79	                        <i class="fas fa-exclamation-circle mr-2"></i>
+    80	                        パスワードが正しくありません
+    81	                    </p>
+    82	                </div>
+    83	                
+    84	                <button 
+    85	                    type="submit" 
+    86	                    class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg hover:shadow-xl"
+    87	                >
+    88	                    <i class="fas fa-sign-in-alt mr-2"></i>ログイン
+    89	                </button>
+    90	            </form>
+    91	            
+    92	            <div class="mt-6 pt-6 border-t border-gray-200">
+    93	                <p class="text-xs text-gray-500 text-center">
+    94	                    <i class="fas fa-info-circle mr-1"></i>
+    95	                    管理者にパスワードをお問い合わせください
+    96	                </p>
+    97	            </div>
+    98	        </div>
+    99	    </div>
+   100	
+   101	    <!-- メインコンテンツ（ログイン後に表示） -->
+   102	    <div id="mainContent" class="hidden">
+   103	    
+   104	    <!-- 通知エリア -->
+   105	    <div id="notificationArea"></div>
+   106	
+   107	    <!-- ヘッダー -->
+   108	    <header class="bg-blue-600 text-white shadow-lg">
+   109	        <div class="container mx-auto px-4 py-4">
+   110	            <div class="flex justify-between items-center">
+   111	                <h1 class="text-2xl font-bold">
+   112	                    <i class="fas fa-hospital-user mr-2"></i>
+   113	                    患者情報管理システム
+   114	                </h1>
+   115	                <button onclick="handleLogout()" class="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors">
+   116	                    <i class="fas fa-sign-out-alt mr-2"></i>ログアウト
+   117	                </button>
+   118	            </div>
+   119	        </div>
+   120	    </header>
+   121	
+   122	    <!-- メインコンテナ -->
+   123	    <div class="container mx-auto px-4 py-6">
+   124	        <!-- タブナビゲーション -->
+   125	        <div class="mb-6">
+   126	            <div class="border-b border-gray-300">
+   127	                <nav class="flex flex-wrap space-x-2" id="tabNav">
+   128	                    <button class="tab-btn active px-4 py-3 font-semibold text-blue-600 border-b-2 border-blue-600" data-tab="dashboard">
+   129	                        <i class="fas fa-chart-line mr-2"></i>ダッシュボード
+   130	                    </button>
+   131	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="register">
+   132	                        <i class="fas fa-user-plus mr-2"></i>患者情報登録
+   133	                    </button>
+   134	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="list">
+   135	                        <i class="fas fa-list mr-2"></i>患者一覧
+   136	                    </button>
+   137	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="discharge">
+   138	                        <i class="fas fa-sign-out-alt mr-2"></i>退院管理
+   139	                    </button>
+   140	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="transfer">
+   141	                        <i class="fas fa-exchange-alt mr-2"></i>転入・転出管理
+   142	                    </button>
+   143	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="readmission">
+   144	                        <i class="fas fa-redo mr-2"></i>退院後3か月以内患者
+   145	                    </button>
+   146	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="history">
+   147	                        <i class="fas fa-history mr-2"></i>履歴
+   148	                    </button>
+   149	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="import">
+   150	                        <i class="fas fa-file-import mr-2"></i>一括インポート
+   151	                    </button>
+   152	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="charts">
+   153	                        <i class="fas fa-chart-pie mr-2"></i>統計グラフ
+   154	                    </button>
+   155	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="daily">
+   156	                        <i class="fas fa-calendar-day mr-2"></i>デイリー記録
+   157	                    </button>
+   158	                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="export">
+   159	                        <i class="fas fa-file-excel mr-2"></i>エクスポート
+   160	                    </button>
+   161	                </nav>
+   162	            </div>
+   163	        </div>
+   164	
+   165	        <!-- ダッシュボードタブ -->
+   166	        <div id="dashboard-tab" class="tab-content active">
+   167	            <!-- 新規入院率アラート -->
+   168	            <div id="newAdmissionAlert" class="mb-6">
+   169	                <div class="border-l-4 p-4 rounded-lg shadow" id="newAdmissionAlertBox">
+   170	                    <div class="flex items-center">
+   171	                        <div class="flex-shrink-0">
+   172	                            <i class="fas fa-chart-line text-2xl" id="newAdmissionIcon"></i>
+   173	                        </div>
+   174	                        <div class="ml-3 flex-1">
+   175	                            <h3 class="text-lg font-semibold" id="newAdmissionTitle">新規入院率モニター</h3>
+   176	                            <div class="mt-2">
+   177	                                <p class="text-sm font-semibold" id="newAdmissionRate">計算中...</p>
+   178	                                <p class="text-xs mt-1" id="newAdmissionDetail"></p>
+   179	                            </div>
+   180	                        </div>
+   181	                    </div>
+   182	                </div>
+   183	            </div>
+   184	
+   185	            <!-- 入院種別統計 -->
+   186	            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+   187	                <div class="bg-white rounded-lg shadow p-6">
+   188	                    <div class="flex items-center justify-between">
+   189	                        <div>
+   190	                            <p class="text-gray-500 text-sm font-semibold">新規入院</p>
+   191	                            <p class="text-3xl font-bold text-blue-600" id="newAdmissionCount">0</p>
+   192	                            <p class="text-xs text-gray-500 mt-1">過去30日</p>
+   193	                        </div>
+   194	                        <div class="bg-blue-100 rounded-full p-4">
+   195	                            <i class="fas fa-user-plus text-blue-600 text-2xl"></i>
+   196	                        </div>
+   197	                    </div>
+   198	                </div>
+   199	
+   200	                <div class="bg-white rounded-lg shadow p-6">
+   201	                    <div class="flex items-center justify-between">
+   202	                        <div>
+   203	                            <p class="text-gray-500 text-sm font-semibold">急性増悪</p>
+   204	                            <p class="text-3xl font-bold text-orange-600" id="acuteCount">0</p>
+   205	                            <p class="text-xs text-gray-500 mt-1">過去30日</p>
+   206	                        </div>
+   207	                        <div class="bg-orange-100 rounded-full p-4">
+   208	                            <i class="fas fa-exclamation-triangle text-orange-600 text-2xl"></i>
+   209	                        </div>
+   210	                    </div>
+   211	                </div>
+   212	
+   213	                <div class="bg-white rounded-lg shadow p-6">
+   214	                    <div class="flex items-center justify-between">
+   215	                        <div>
+   216	                            <p class="text-gray-500 text-sm font-semibold">再入院（出来高）</p>
+   217	                            <p class="text-3xl font-bold text-purple-600" id="readmissionCount">0</p>
+   218	                            <p class="text-xs text-gray-500 mt-1">過去30日</p>
+   219	                        </div>
+   220	                        <div class="bg-purple-100 rounded-full p-4">
+   221	                            <i class="fas fa-redo text-purple-600 text-2xl"></i>
+   222	                        </div>
+   223	                    </div>
+   224	                </div>
+   225	            </div>
+   226	
+   227	            <!-- 2か月超過アラート -->
+   228	            <div id="twoMonthsAlert" class="mb-6 hidden">
+   229	                <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow">
+   230	                    <div class="flex items-center">
+   231	                        <div class="flex-shrink-0">
+   232	                            <i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i>
+   233	                        </div>
+   234	                        <div class="ml-3 flex-1">
+   235	                            <h3 class="text-lg font-semibold text-red-800">入院期間2か月超過の患者がいます</h3>
+   236	                            <div id="twoMonthsAlertList" class="mt-2 text-sm text-red-700"></div>
+   237	                        </div>
+   238	                    </div>
+   239	                </div>
+   240	            </div>
+   241	
+   242	            <!-- 統計カード -->
+   243	            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+   244	                <div class="bg-white rounded-lg shadow p-6">
+   245	                    <div class="flex items-center justify-between">
+   246	                        <div>
+   247	                            <p class="text-gray-500 text-sm font-semibold">総患者数</p>
+   248	                            <p class="text-3xl font-bold text-blue-600" id="totalPatients">0</p>
+   249	                        </div>
+   250	                        <div class="bg-blue-100 rounded-full p-4">
+   251	                            <i class="fas fa-users text-blue-600 text-2xl"></i>
+   252	                        </div>
+   253	                    </div>
+   254	                </div>
+   255	
+   256	                <div class="bg-white rounded-lg shadow p-6">
+   257	                    <div class="flex items-center justify-between">
+   258	                        <div>
+   259	                            <p class="text-gray-500 text-sm font-semibold">入院患者数</p>
+   260	                            <p class="text-3xl font-bold text-green-600" id="admittedPatients">0</p>
+   261	                        </div>
+   262	                        <div class="bg-green-100 rounded-full p-4">
+   263	                            <i class="fas fa-bed text-green-600 text-2xl"></i>
+   264	                        </div>
+   265	                    </div>
+   266	                </div>
+   267	
+   268	                <div class="bg-white rounded-lg shadow p-6">
+   269	                    <div class="flex items-center justify-between">
+   270	                        <div>
+   271	                            <p class="text-gray-500 text-sm font-semibold">2か月経過患者</p>
+   272	                            <p class="text-3xl font-bold text-orange-600" id="twoMonthsPatients">0</p>
+   273	                        </div>
+   274	                        <div class="bg-orange-100 rounded-full p-4">
+   275	                            <i class="fas fa-clock text-orange-600 text-2xl"></i>
+   276	                        </div>
+   277	                    </div>
+   278	                </div>
+   279	
+   280	                <div class="bg-white rounded-lg shadow p-6">
+   281	                    <div class="flex items-center justify-between">
+   282	                        <div>
+   283	                            <p class="text-gray-500 text-sm font-semibold">退院患者数</p>
+   284	                            <p class="text-3xl font-bold text-gray-600" id="dischargedPatients">0</p>
+   285	                        </div>
+   286	                        <div class="bg-gray-100 rounded-full p-4">
+   287	                            <i class="fas fa-home text-gray-600 text-2xl"></i>
+   288	                        </div>
+   289	                    </div>
+   290	                </div>
+   291	            </div>
+   292	
+   293	            <!-- 入院形態別統計 -->
+   294	            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+   295	                <div class="bg-white rounded-lg shadow p-6">
+   296	                    <h3 class="text-lg font-bold text-gray-800 mb-4">
+   297	                        <i class="fas fa-user-check text-green-600 mr-2"></i>任意入院
+   298	                    </h3>
+   299	                    <div class="text-3xl font-bold text-green-600" id="voluntaryCount">0</div>
+   300	                    <p class="text-sm text-gray-500 mt-2">入院患者数</p>
+   301	                </div>
+   302	
+   303	                <div class="bg-white rounded-lg shadow p-6">
+   304	                    <h3 class="text-lg font-bold text-gray-800 mb-4">
+   305	                        <i class="fas fa-hand-holding-medical text-blue-600 mr-2"></i>医療保護入院
+   306	                    </h3>
+   307	                    <div class="text-3xl font-bold text-blue-600" id="medicalProtectionCount">0</div>
+   308	                    <p class="text-sm text-gray-500 mt-2">入院患者数</p>
+   309	                </div>
+   310	
+   311	                <div class="bg-white rounded-lg shadow p-6">
+   312	                    <h3 class="text-lg font-bold text-gray-800 mb-4">
+   313	                        <i class="fas fa-gavel text-red-600 mr-2"></i>措置入院
+   314	                    </h3>
+   315	                    <div class="text-3xl font-bold text-red-600" id="compulsoryCount">0</div>
+   316	                    <p class="text-sm text-gray-500 mt-2">入院患者数</p>
+   317	                </div>
+   318	            </div>
+   319	
+   320	            <!-- チーム別統計 -->
+   321	            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+   322	                <div class="bg-white rounded-lg shadow p-6">
+   323	                    <h3 class="text-lg font-bold text-gray-800 mb-4">
+   324	                        <i class="fas fa-users-cog text-blue-600 mr-2"></i>チーム1A
+   325	                    </h3>
+   326	                    <div class="text-3xl font-bold text-blue-600" id="team1ACount">0</div>
+   327	                    <p class="text-sm text-gray-500 mt-2">入院患者数</p>
+   328	                    <div class="mt-4" id="team1AList"></div>
+   329	                </div>
+   330	
+   331	                <div class="bg-white rounded-lg shadow p-6">
+   332	                    <h3 class="text-lg font-bold text-gray-800 mb-4">
+   333	                        <i class="fas fa-users-cog text-purple-600 mr-2"></i>チーム1B
+   334	                    </h3>
+   335	                    <div class="text-3xl font-bold text-purple-600" id="team1BCount">0</div>
+   336	                    <p class="text-sm text-gray-500 mt-2">入院患者数</p>
+   337	                    <div class="mt-4" id="team1BList"></div>
+   338	                </div>
+   339	            </div>
+   340	
+   341	            <!-- 2か月経過患者リスト -->
+   342	            <div class="bg-white rounded-lg shadow">
+   343	                <div class="px-6 py-4 border-b border-gray-200">
+   344	                    <h2 class="text-xl font-bold text-gray-800">
+   345	                        <i class="fas fa-exclamation-triangle text-orange-500 mr-2"></i>
+   346	                        入院後2か月経過患者リスト
+   347	                    </h2>
+   348	                </div>
+   349	                <div class="p-6">
+   350	                    <div id="twoMonthsPatientsList" class="overflow-x-auto"></div>
+   351	                </div>
+   352	            </div>
+   353	        </div>
+   354	
+   355	        <!-- 患者情報登録タブ -->
+   356	        <div id="register-tab" class="tab-content">
+   357	            <div class="bg-white rounded-lg shadow p-6">
+   358	                <h2 class="text-2xl font-bold text-gray-800 mb-6">患者情報登録</h2>
+   359	                <form id="patientForm" class="space-y-4">
+   360	                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+   361	                        <div>
+   362	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   363	                                患者番号 <span class="text-red-500">*</span>
+   364	                            </label>
+   365	                            <input type="text" id="patientId" required 
+   366	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+   367	                                placeholder="例: P0001">
+   368	                        </div>
+   369	
+   370	                        <div>
+   371	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   372	                                患者名 <span class="text-red-500">*</span>
+   373	                            </label>
+   374	                            <input type="text" id="name" required 
+   375	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+   376	                                placeholder="例: 山田 太郎">
+   377	                        </div>
+   378	
+   379	                        <div>
+   380	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   381	                                生年月日 <span class="text-red-500">*</span>
+   382	                            </label>
+   383	                            <input type="date" id="dateOfBirth" required 
+   384	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+   385	                        </div>
+   386	
+   387	                        <div>
+   388	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   389	                                病名 <span class="text-red-500">*</span>
+   390	                            </label>
+   391	                            <input type="text" id="disease" required 
+   392	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+   393	                                placeholder="例: 統合失調症">
+   394	                        </div>
+   395	
+   396	                        <div>
+   397	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   398	                                主治医 <span class="text-red-500">*</span>
+   399	                            </label>
+   400	                            <input type="text" id="primaryPhysician" required 
+   401	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+   402	                                placeholder="例: 田中 一郎">
+   403	                        </div>
+   404	
+   405	                        <div>
+   406	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   407	                                入院日 <span class="text-red-500">*</span>
+   408	                            </label>
+   409	                            <input type="date" id="admissionDate" required 
+   410	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+   411	                        </div>
+   412	
+   413	                        <div>
+   414	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   415	                                入院種別 <span class="text-red-500">*</span>
+   416	                            </label>
+   417	                            <select id="admissionType" required 
+   418	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+   419	                                <option value="">選択してください</option>
+   420	                                <option value="新規入院">新規入院</option>
+   421	                                <option value="急性増悪">急性増悪（新規入院扱い）</option>
+   422	                                <option value="再入院">再入院（出来高）</option>
+   423	                            </select>
+   424	                        </div>
+   425	
+   426	                        <div>
+   427	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   428	                                入院形態 <span class="text-red-500">*</span>
+   429	                            </label>
+   430	                            <select id="admissionForm" required 
+   431	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+   432	                                <option value="">選択してください</option>
+   433	                                <option value="任意入院">任意入院</option>
+   434	                                <option value="医療保護入院">医療保護入院</option>
+   435	                                <option value="措置入院">措置入院</option>
+   436	                            </select>
+   437	                        </div>
+   438	
+   439	                        <div>
+   440	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   441	                                チーム <span class="text-red-500">*</span>
+   442	                            </label>
+   443	                            <select id="team" required 
+   444	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+   445	                                <option value="">選択してください</option>
+   446	                                <option value="1A">チーム1A</option>
+   447	                                <option value="1B">チーム1B</option>
+   448	                            </select>
+   449	                        </div>
+   450	
+   451	                        <div>
+   452	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+   453	                                受け持ち看護師
+   454	                            </label>
+   455	                            <input type="text" id="assignedNurse" 
+   456	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+   457	                                placeholder="例: 山田 看護師">
+   458	                        </div>
+   459	                    </div>
+   460	
+   461	                    <div class="flex justify-end space-x-3 mt-6">
+   462	                        <button type="button" onclick="resetForm()" 
+   463	                            class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+   464	                            <i class="fas fa-times mr-2"></i>リセット
+   465	                        </button>
+   466	                        <button type="submit" 
+   467	                            class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+   468	                            <i class="fas fa-save mr-2"></i>登録
+   469	                        </button>
+   470	                    </div>
+   471	                </form>
+   472	            </div>
+   473	        </div>
+   474	
+   475	        <!-- 患者一覧タブ -->
+   476	        <div id="list-tab" class="tab-content">
+   477	            <div class="bg-white rounded-lg shadow p-6">
+   478	                <h2 class="text-2xl font-bold text-gray-800 mb-6">患者一覧</h2>
+   479	                
+   480	                <div class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+   481	                    <input type="text" id="searchInput" 
+   482	                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+   483	                        placeholder="患者番号または患者名で検索...">
+   484	                    
+   485	                    <select id="teamFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+   486	                        <option value="">すべてのチーム</option>
+   487	                        <option value="1A">チーム1A</option>
+   488	                        <option value="1B">チーム1B</option>
+   489	                    </select>
+   490	
+   491	                    <select id="statusFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+   492	                        <option value="">すべてのステータス</option>
+   493	                        <option value="入院中">入院中</option>
+   494	                        <option value="退院">退院</option>
+   495	                    </select>
+   496	
+   497	                    <select id="admissionFormFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+   498	                        <option value="">すべての入院形態</option>
+   499	                        <option value="任意入院">任意入院</option>
+   500	                        <option value="医療保護入院">医療保護入院</option>
+   501	                        <option value="措置入院">措置入院</option>
+   502	                    </select>
+   503	                </div>
+   504	
+   505	                <div id="patientsList" class="overflow-x-auto"></div>
+   506	            </div>
+   507	        </div>
+   508	
+   509	        <!-- 退院管理タブ -->
+   510	        <div id="discharge-tab" class="tab-content">
+   511	            <div class="bg-white rounded-lg shadow p-6">
+   512	                <h2 class="text-2xl font-bold text-gray-800 mb-6">退院管理</h2>
+   513	                <div id="dischargeList" class="overflow-x-auto"></div>
+   514	            </div>
+   515	        </div>
+   516	
+   517	        <!-- 転入・転出管理タブ -->
+   518	        <div id="transfer-tab" class="tab-content">
+   519	            <div class="bg-white rounded-lg shadow p-6 mb-6">
+   520	                <h2 class="text-2xl font-bold text-gray-800 mb-6">
+   521	                    <i class="fas fa-exchange-alt text-blue-500 mr-2"></i>
+   522	                    転入・転出管理
+   523	                </h2>
+   524	                
+   525	                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+   526	                    <!-- 転出処理 -->
+   527	                    <div class="border-2 border-orange-200 rounded-lg p-4 bg-orange-50">
+   528	                        <h3 class="text-lg font-bold text-orange-800 mb-4">
+   529	                            <i class="fas fa-sign-out-alt mr-2"></i>転出処理
+   530	                        </h3>
+   531	                        <p class="text-sm text-gray-600 mb-4">当病棟から他病棟へ患者を転出します</p>
+   532	                        <button onclick="showTransferOutModal()" 
+   533	                            class="w-full px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+   534	                            <i class="fas fa-arrow-right mr-2"></i>転出処理を開始
+   535	                        </button>
+   536	                    </div>
+   537	
+   538	                    <!-- 転入処理 -->
+   539	                    <div class="border-2 border-green-200 rounded-lg p-4 bg-green-50">
+   540	                        <h3 class="text-lg font-bold text-green-800 mb-4">
+   541	                            <i class="fas fa-sign-in-alt mr-2"></i>転入処理
+   542	                        </h3>
+   543	                        <p class="text-sm text-gray-600 mb-4">他病棟から当病棟へ患者を転入します</p>
+   544	                        <button onclick="showTransferInModal()" 
+   545	                            class="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+   546	                            <i class="fas fa-arrow-left mr-2"></i>転入処理を開始
+   547	                        </button>
+   548	                    </div>
+   549	                </div>
+   550	            </div>
+   551	
+   552	            <!-- 転入・転出履歴 -->
+   553	            <div class="bg-white rounded-lg shadow p-6">
+   554	                <h3 class="text-xl font-bold text-gray-800 mb-4">
+   555	                    <i class="fas fa-history text-gray-500 mr-2"></i>
+   556	                    転入・転出履歴
+   557	                </h3>
+   558	                <div id="transferHistoryList" class="overflow-x-auto"></div>
+   559	            </div>
+   560	        </div>
+   561	
+   562	        <!-- 退院後3か月以内患者タブ -->
+   563	        <div id="readmission-tab" class="tab-content">
+   564	            <div class="bg-white rounded-lg shadow p-6">
+   565	                <h2 class="text-2xl font-bold text-gray-800 mb-6">
+   566	                    <i class="fas fa-redo text-orange-500 mr-2"></i>
+   567	                    退院後3か月以内患者リスト
+   568	                </h2>
+   569	                <p class="text-sm text-gray-600 mb-4">退院後3か月以内の患者の再入院リスク管理に活用できます。</p>
+   570	                <div id="recentDischargeList" class="overflow-x-auto"></div>
+   571	            </div>
+   572	        </div>
+   573	
+   574	        <!-- 履歴タブ -->
+   575	        <div id="history-tab" class="tab-content">
+   576	            <div class="bg-white rounded-lg shadow p-6">
+   577	                <h2 class="text-2xl font-bold text-gray-800 mb-6">変更履歴</h2>
+   578	                
+   579	                <div class="mb-4">
+   580	                    <input type="text" id="historySearch" 
+   581	                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+   582	                        placeholder="患者番号または患者名で検索...">
+   583	                </div>
+   584	
+   585	                <div id="historyList" class="space-y-4"></div>
+   586	            </div>
+   587	        </div>
+   588	
+   589	        <!-- 一括インポートタブ -->
+   590	        <div id="import-tab" class="tab-content">
+   591	            <div class="bg-white rounded-lg shadow p-6">
+   592	                <h2 class="text-2xl font-bold text-gray-800 mb-6">一括インポート</h2>
+   593	                
+   594	                <div class="mb-6">
+   595	                    <button onclick="downloadTemplate()" 
+   596	                        class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+   597	                        <i class="fas fa-download mr-2"></i>テンプレートをダウンロード
+   598	                    </button>
+   599	                </div>
+   600	
+   601	                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+   602	                    <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleFileSelect(event)">
+   603	                    <label for="csvFileInput" class="cursor-pointer">
+   604	                        <i class="fas fa-cloud-upload-alt text-6xl text-gray-400 mb-4"></i>
+   605	                        <p class="text-lg font-semibold text-gray-700">CSVファイルをドラッグ&ドロップ</p>
+   606	                        <p class="text-sm text-gray-500 mt-2">または、クリックしてファイルを選択</p>
+   607	                    </label>
+   608	                </div>
+   609	
+   610	                <div id="importPreview" class="mt-6 hidden">
+   611	                    <h3 class="text-lg font-semibold text-gray-800 mb-4">インポートプレビュー</h3>
+   612	                    <div id="importPreviewContent" class="overflow-x-auto mb-4"></div>
+   613	                    <button onclick="executeImport()" 
+   614	                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+   615	                        <i class="fas fa-check mr-2"></i>インポート実行
+   616	                    </button>
+   617	                </div>
+   618	            </div>
+   619	        </div>
+   620	
+   621	        <!-- 統計グラフタブ -->
+   622	        <div id="charts-tab" class="tab-content">
+   623	            <div class="space-y-6">
+   624	                <div class="bg-white rounded-lg shadow p-6">
+   625	                    <h2 class="text-xl font-bold text-gray-800 mb-4">入院種別統計</h2>
+   626	                    <div class="chart-container">
+   627	                        <canvas id="admissionTypeChart"></canvas>
+   628	                    </div>
+   629	                </div>
+   630	
+   631	                <div class="bg-white rounded-lg shadow p-6">
+   632	                    <h2 class="text-xl font-bold text-gray-800 mb-4">入院形態別統計</h2>
+   633	                    <div class="chart-container">
+   634	                        <canvas id="admissionFormChart"></canvas>
+   635	                    </div>
+   636	                </div>
+   637	
+   638	                <div class="bg-white rounded-lg shadow p-6">
+   639	                    <h2 class="text-xl font-bold text-gray-800 mb-4">チーム別入院患者数</h2>
+   640	                    <div class="chart-container">
+   641	                        <canvas id="teamChart"></canvas>
+   642	                    </div>
+   643	                </div>
+   644	
+   645	                <div class="bg-white rounded-lg shadow p-6">
+   646	                    <h2 class="text-xl font-bold text-gray-800 mb-4">病名別患者数</h2>
+   647	                    <div class="chart-container">
+   648	                        <canvas id="diseaseChart"></canvas>
+   649	                    </div>
+   650	                </div>
+   651	
+   652	                <div class="bg-white rounded-lg shadow p-6">
+   653	                    <h2 class="text-xl font-bold text-gray-800 mb-4">入院期間分布</h2>
+   654	                    <div class="chart-container">
+   655	                        <canvas id="periodChart"></canvas>
+   656	                    </div>
+   657	                </div>
+   658	            </div>
+   659	        </div>
+   660	
+   661	        <!-- デイリー記録タブ -->
+   662	        <div id="daily-tab" class="tab-content">
+   663	            <div class="bg-white rounded-lg shadow p-6">
+   664	                <h2 class="text-2xl font-bold text-gray-800 mb-6">
+   665	                    <i class="fas fa-calendar-day mr-2"></i>デイリー入退院・転入転出記録
+   666	                </h2>
+   667	
+   668	                <!-- 日付選択 -->
+   669	                <div class="mb-6 bg-blue-50 p-4 rounded-lg">
+   670	                    <label class="block text-sm font-semibold text-gray-700 mb-2">記録日付</label>
+   671	                    <div class="flex items-center space-x-4">
+   672	                        <input type="date" id="dailyRecordDate" 
+   673	                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   674	                        <button onclick="loadDailyRecord()" 
+   675	                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+   676	                            <i class="fas fa-search mr-2"></i>この日の記録を表示
+   677	                        </button>
+   678	                        <button onclick="setToday()" 
+   679	                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+   680	                            <i class="fas fa-calendar-day mr-2"></i>今日
+   681	                        </button>
+   682	                    </div>
+   683	                </div>
+   684	
+   685	                <!-- 入力方法選択 -->
+   686	                <div class="mb-6 flex space-x-4">
+   687	                    <button id="autoModeBtn" onclick="switchMode('auto')" 
+   688	                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+   689	                        <i class="fas fa-magic mr-2"></i>自動集計モード
+   690	                    </button>
+   691	                    <button id="manualModeBtn" onclick="switchMode('manual')" 
+   692	                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+   693	                        <i class="fas fa-edit mr-2"></i>手動入力モード
+   694	                    </button>
+   695	                </div>
+   696	
+   697	                <!-- 自動集計説明 -->
+   698	                <div id="autoModeInfo" class="mb-6 bg-green-50 border-l-4 border-green-500 p-4 rounded">
+   699	                    <p class="text-sm text-green-700">
+   700	                        <i class="fas fa-info-circle mr-2"></i>
+   701	                        <strong>自動集計モード:</strong> 患者登録・退院・転入・転出の操作時に自動的にカウントされます。手動での修正も可能です。
+   702	                    </p>
+   703	                </div>
+   704	
+   705	                <!-- 手動入力説明 -->
+   706	                <div id="manualModeInfo" class="hidden mb-6 bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded">
+   707	                    <p class="text-sm text-yellow-700">
+   708	                        <i class="fas fa-exclamation-triangle mr-2"></i>
+   709	                        <strong>手動入力モード:</strong> 自動集計を無効化し、数値を直接入力します。
+   710	                    </p>
+   711	                </div>
+   712	
+   713	                <!-- チーム1A記録 -->
+   714	                <div class="mb-6">
+   715	                    <div class="bg-blue-50 rounded-lg p-6">
+   716	                        <h3 class="text-xl font-bold text-blue-800 mb-4">
+   717	                            <i class="fas fa-users mr-2"></i>チーム 1A
+   718	                        </h3>
+   719	                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+   720	                            <div class="bg-white rounded-lg p-4 shadow">
+   721	                                <label class="block text-xs font-semibold text-gray-600 mb-2">入院</label>
+   722	                                <input type="number" id="team1A_admission" value="0" min="0" 
+   723	                                    class="w-full text-2xl font-bold text-green-600 border-b-2 border-green-600 focus:outline-none text-center"
+   724	                                    onchange="updateTotals()">
+   725	                            </div>
+   726	                            <div class="bg-white rounded-lg p-4 shadow">
+   727	                                <label class="block text-xs font-semibold text-gray-600 mb-2">退院</label>
+   728	                                <input type="number" id="team1A_discharge" value="0" min="0" 
+   729	                                    class="w-full text-2xl font-bold text-red-600 border-b-2 border-red-600 focus:outline-none text-center"
+   730	                                    onchange="updateTotals()">
+   731	                            </div>
+   732	                            <div class="bg-white rounded-lg p-4 shadow">
+   733	                                <label class="block text-xs font-semibold text-gray-600 mb-2">転入</label>
+   734	                                <input type="number" id="team1A_transferIn" value="0" min="0" 
+   735	                                    class="w-full text-2xl font-bold text-blue-600 border-b-2 border-blue-600 focus:outline-none text-center"
+   736	                                    onchange="updateTotals()">
+   737	                            </div>
+   738	                            <div class="bg-white rounded-lg p-4 shadow">
+   739	                                <label class="block text-xs font-semibold text-gray-600 mb-2">転出</label>
+   740	                                <input type="number" id="team1A_transferOut" value="0" min="0" 
+   741	                                    class="w-full text-2xl font-bold text-orange-600 border-b-2 border-orange-600 focus:outline-none text-center"
+   742	                                    onchange="updateTotals()">
+   743	                            </div>
+   744	                            <div class="bg-blue-100 rounded-lg p-4 shadow">
+   745	                                <label class="block text-xs font-semibold text-blue-800 mb-2">合計変動</label>
+   746	                                <div id="team1A_total" class="text-2xl font-bold text-blue-800 text-center">0</div>
+   747	                            </div>
+   748	                        </div>
+   749	                    </div>
+   750	                </div>
+   751	
+   752	                <!-- チーム1B記録 -->
+   753	                <div class="mb-6">
+   754	                    <div class="bg-purple-50 rounded-lg p-6">
+   755	                        <h3 class="text-xl font-bold text-purple-800 mb-4">
+   756	                            <i class="fas fa-users mr-2"></i>チーム 1B
+   757	                        </h3>
+   758	                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+   759	                            <div class="bg-white rounded-lg p-4 shadow">
+   760	                                <label class="block text-xs font-semibold text-gray-600 mb-2">入院</label>
+   761	                                <input type="number" id="team1B_admission" value="0" min="0" 
+   762	                                    class="w-full text-2xl font-bold text-green-600 border-b-2 border-green-600 focus:outline-none text-center"
+   763	                                    onchange="updateTotals()">
+   764	                            </div>
+   765	                            <div class="bg-white rounded-lg p-4 shadow">
+   766	                                <label class="block text-xs font-semibold text-gray-600 mb-2">退院</label>
+   767	                                <input type="number" id="team1B_discharge" value="0" min="0" 
+   768	                                    class="w-full text-2xl font-bold text-red-600 border-b-2 border-red-600 focus:outline-none text-center"
+   769	                                    onchange="updateTotals()">
+   770	                            </div>
+   771	                            <div class="bg-white rounded-lg p-4 shadow">
+   772	                                <label class="block text-xs font-semibold text-gray-600 mb-2">転入</label>
+   773	                                <input type="number" id="team1B_transferIn" value="0" min="0" 
+   774	                                    class="w-full text-2xl font-bold text-blue-600 border-b-2 border-blue-600 focus:outline-none text-center"
+   775	                                    onchange="updateTotals()">
+   776	                            </div>
+   777	                            <div class="bg-white rounded-lg p-4 shadow">
+   778	                                <label class="block text-xs font-semibold text-gray-600 mb-2">転出</label>
+   779	                                <input type="number" id="team1B_transferOut" value="0" min="0" 
+   780	                                    class="w-full text-2xl font-bold text-orange-600 border-b-2 border-orange-600 focus:outline-none text-center"
+   781	                                    onchange="updateTotals()">
+   782	                            </div>
+   783	                            <div class="bg-purple-100 rounded-lg p-4 shadow">
+   784	                                <label class="block text-xs font-semibold text-purple-800 mb-2">合計変動</label>
+   785	                                <div id="team1B_total" class="text-2xl font-bold text-purple-800 text-center">0</div>
+   786	                            </div>
+   787	                        </div>
+   788	                    </div>
+   789	                </div>
+   790	
+   791	                <!-- 全体合計 -->
+   792	                <div class="mb-6">
+   793	                    <div class="bg-gray-100 rounded-lg p-6">
+   794	                        <h3 class="text-xl font-bold text-gray-800 mb-4">
+   795	                            <i class="fas fa-calculator mr-2"></i>全体合計（チーム1A + 1B）
+   796	                        </h3>
+   797	                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+   798	                            <div class="bg-white rounded-lg p-4 shadow">
+   799	                                <label class="block text-xs font-semibold text-gray-600 mb-2">入院合計</label>
+   800	                                <div id="total_admission" class="text-3xl font-bold text-green-600 text-center">0</div>
+   801	                            </div>
+   802	                            <div class="bg-white rounded-lg p-4 shadow">
+   803	                                <label class="block text-xs font-semibold text-gray-600 mb-2">退院合計</label>
+   804	                                <div id="total_discharge" class="text-3xl font-bold text-red-600 text-center">0</div>
+   805	                            </div>
+   806	                            <div class="bg-white rounded-lg p-4 shadow">
+   807	                                <label class="block text-xs font-semibold text-gray-600 mb-2">転入合計</label>
+   808	                                <div id="total_transferIn" class="text-3xl font-bold text-blue-600 text-center">0</div>
+   809	                            </div>
+   810	                            <div class="bg-white rounded-lg p-4 shadow">
+   811	                                <label class="block text-xs font-semibold text-gray-600 mb-2">転出合計</label>
+   812	                                <div id="total_transferOut" class="text-3xl font-bold text-orange-600 text-center">0</div>
+   813	                            </div>
+   814	                            <div class="bg-gray-800 rounded-lg p-4 shadow">
+   815	                                <label class="block text-xs font-semibold text-gray-200 mb-2">純増減</label>
+   816	                                <div id="total_net" class="text-3xl font-bold text-white text-center">0</div>
+   817	                            </div>
+   818	                        </div>
+   819	                    </div>
+   820	                </div>
+   821	
+   822	                <!-- 保存ボタン -->
+   823	                <div class="flex space-x-4">
+   824	                    <button onclick="saveDailyRecord()" 
+   825	                        class="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">
+   826	                        <i class="fas fa-save mr-2"></i>この日の記録を保存
+   827	                    </button>
+   828	                    <button onclick="clearDailyRecord()" 
+   829	                        class="px-6 py-3 bg-gray-400 text-white rounded-lg hover:bg-gray-500">
+   830	                        <i class="fas fa-eraser mr-2"></i>クリア
+   831	                    </button>
+   832	                </div>
+   833	
+   834	                <!-- 過去の記録一覧 -->
+   835	                <div class="mt-8">
+   836	                    <h3 class="text-xl font-bold text-gray-800 mb-4">
+   837	                        <i class="fas fa-history mr-2"></i>過去30日間の記録
+   838	                    </h3>
+   839	                    <div class="overflow-x-auto">
+   840	                        <table class="min-w-full bg-white border border-gray-300 rounded-lg">
+   841	                            <thead class="bg-gray-50">
+   842	                                <tr>
+   843	                                    <th class="px-4 py-3 border-b text-left text-xs font-semibold text-gray-600">日付</th>
+   844	                                    <th class="px-4 py-3 border-b text-center text-xs font-semibold text-gray-600" colspan="4">チーム 1A</th>
+   845	                                    <th class="px-4 py-3 border-b text-center text-xs font-semibold text-gray-600" colspan="4">チーム 1B</th>
+   846	                                    <th class="px-4 py-3 border-b text-center text-xs font-semibold text-gray-600">全体<br>純増減</th>
+   847	                                    <th class="px-4 py-3 border-b text-center text-xs font-semibold text-gray-600">操作</th>
+   848	                                </tr>
+   849	                                <tr class="bg-gray-100">
+   850	                                    <th class="px-4 py-2 border-b text-xs text-gray-600"></th>
+   851	                                    <th class="px-2 py-2 border-b text-xs text-gray-600">入</th>
+   852	                                    <th class="px-2 py-2 border-b text-xs text-gray-600">退</th>
+   853	                                    <th class="px-2 py-2 border-b text-xs text-gray-600">転入</th>
+   854	                                    <th class="px-2 py-2 border-b text-xs text-gray-600">転出</th>
+   855	                                    <th class="px-2 py-2 border-b text-xs text-gray-600">入</th>
+   856	                                    <th class="px-2 py-2 border-b text-xs text-gray-600">退</th>
+   857	                                    <th class="px-2 py-2 border-b text-xs text-gray-600">転入</th>
+   858	                                    <th class="px-2 py-2 border-b text-xs text-gray-600">転出</th>
+   859	                                    <th class="px-2 py-2 border-b text-xs text-gray-600"></th>
+   860	                                    <th class="px-2 py-2 border-b text-xs text-gray-600"></th>
+   861	                                </tr>
+   862	                            </thead>
+   863	                            <tbody id="dailyRecordsList">
+   864	                                <tr>
+   865	                                    <td colspan="11" class="px-4 py-8 text-center text-gray-500">
+   866	                                        記録がありません
+   867	                                    </td>
+   868	                                </tr>
+   869	                            </tbody>
+   870	                        </table>
+   871	                    </div>
+   872	                </div>
+   873	
+   874	                <!-- CSV エクスポート -->
+   875	                <div class="mt-6">
+   876	                    <button onclick="exportDailyRecordsCSV()" 
+   877	                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+   878	                        <i class="fas fa-file-excel mr-2"></i>デイリー記録をCSVでエクスポート
+   879	                    </button>
+   880	                </div>
+   881	            </div>
+   882	        </div>
+   883	
+   884	        <!-- エクスポートタブ -->
+   885	        <div id="export-tab" class="tab-content">
+   886	            <div class="bg-white rounded-lg shadow p-6">
+   887	                <h2 class="text-2xl font-bold text-gray-800 mb-6">データエクスポート</h2>
+   888	                
+   889	                <div class="mb-6">
+   890	                    <p class="text-gray-600 mb-4">全患者データをCSV形式でエクスポートします。</p>
+   891	                    <button onclick="exportCSV()" 
+   892	                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+   893	                        <i class="fas fa-file-excel mr-2"></i>CSVファイルとしてエクスポート
+   894	                    </button>
+   895	                </div>
+   896	
+   897	                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+   898	                    <h3 class="font-semibold text-blue-800 mb-2">エクスポート内容</h3>
+   899	                    <ul class="text-sm text-blue-700 space-y-1">
+   900	                        <li>• 患者番号、患者名、チーム</li>
+   901	                        <li>• 生年月日、病名、主治医</li>
+   902	                        <li>• 受け持ち看護師、入院日、退院日</li>
+   903	                        <li>• 入院種別、入院形態</li>
+   904	                        <li>• ステータス、入院期間</li>
+   905	                    </ul>
+   906	                </div>
+   907	            </div>
+   908	        </div>
+   909	    </div>
+   910	
+   911	    <!-- 編集モーダル -->
+   912	    <div id="editModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+   913	        <div class="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full mx-4 max-h-screen overflow-y-auto">
+   914	            <h3 class="text-2xl font-bold text-gray-800 mb-6">患者情報編集</h3>
+   915	            <form id="editForm">
+   916	                <input type="hidden" id="editId">
+   917	                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+   918	                    <div>
+   919	                        <label class="block text-sm font-semibold text-gray-700 mb-2">患者番号</label>
+   920	                        <input type="text" id="editPatientId" required 
+   921	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   922	                    </div>
+   923	                    <div>
+   924	                        <label class="block text-sm font-semibold text-gray-700 mb-2">患者名</label>
+   925	                        <input type="text" id="editName" required 
+   926	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   927	                    </div>
+   928	                    <div>
+   929	                        <label class="block text-sm font-semibold text-gray-700 mb-2">生年月日</label>
+   930	                        <input type="date" id="editDateOfBirth" required 
+   931	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   932	                    </div>
+   933	                    <div>
+   934	                        <label class="block text-sm font-semibold text-gray-700 mb-2">病名</label>
+   935	                        <input type="text" id="editDisease" required 
+   936	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   937	                    </div>
+   938	                    <div>
+   939	                        <label class="block text-sm font-semibold text-gray-700 mb-2">主治医</label>
+   940	                        <input type="text" id="editPrimaryPhysician" required 
+   941	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   942	                    </div>
+   943	                    <div>
+   944	                        <label class="block text-sm font-semibold text-gray-700 mb-2">入院日</label>
+   945	                        <input type="date" id="editAdmissionDate" required 
+   946	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   947	                    </div>
+   948	                    <div>
+   949	                        <label class="block text-sm font-semibold text-gray-700 mb-2">入院種別</label>
+   950	                        <select id="editAdmissionType" required 
+   951	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   952	                            <option value="新規入院">新規入院</option>
+   953	                            <option value="急性増悪">急性増悪（新規入院扱い）</option>
+   954	                            <option value="再入院">再入院（出来高）</option>
+   955	                        </select>
+   956	                    </div>
+   957	                    <div>
+   958	                        <label class="block text-sm font-semibold text-gray-700 mb-2">入院形態</label>
+   959	                        <select id="editAdmissionForm" required 
+   960	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   961	                            <option value="任意入院">任意入院</option>
+   962	                            <option value="医療保護入院">医療保護入院</option>
+   963	                            <option value="措置入院">措置入院</option>
+   964	                        </select>
+   965	                    </div>
+   966	                    <div>
+   967	                        <label class="block text-sm font-semibold text-gray-700 mb-2">チーム</label>
+   968	                        <select id="editTeam" required 
+   969	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   970	                            <option value="1A">チーム1A</option>
+   971	                            <option value="1B">チーム1B</option>
+   972	                        </select>
+   973	                    </div>
+   974	                    <div>
+   975	                        <label class="block text-sm font-semibold text-gray-700 mb-2">受け持ち看護師</label>
+   976	                        <input type="text" id="editAssignedNurse" 
+   977	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   978	                    </div>
+   979	                    <div>
+   980	                        <label class="block text-sm font-semibold text-gray-700 mb-2">ステータス</label>
+   981	                        <select id="editStatus" required 
+   982	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   983	                            <option value="入院中">入院中</option>
+   984	                            <option value="退院">退院</option>
+   985	                        </select>
+   986	                    </div>
+   987	                    <div>
+   988	                        <label class="block text-sm font-semibold text-gray-700 mb-2">退院日</label>
+   989	                        <input type="date" id="editDischargeDate" 
+   990	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+   991	                    </div>
+   992	                </div>
+   993	                <div class="flex justify-end space-x-3 mt-6">
+   994	                    <button type="button" onclick="closeEditModal()" 
+   995	                        class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+   996	                        キャンセル
+   997	                    </button>
+   998	                    <button type="submit" 
+   999	                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+  1000	                    </button>
+  1001	                </div>
+  1002	            </form>
+  1003	        </div>
+  1004	    </div>
+  1005	
+  1006	    <!-- 転出モーダル -->
+  1007	    <div id="transferOutModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+  1008	        <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+  1009	            <h3 class="text-2xl font-bold text-gray-800 mb-6">
+  1010	                <i class="fas fa-sign-out-alt text-orange-600 mr-2"></i>
+  1011	                転出処理
+  1012	            </h3>
+  1013	            <form id="transferOutForm">
+  1014	                <div class="space-y-4">
+  1015	                    <div>
+  1016	                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1017	                            転出する患者 <span class="text-red-500">*</span>
+  1018	                        </label>
+  1019	                        <select id="transferOutPatientId" required 
+  1020	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1021	                            onchange="updateTransferOutPatientInfo()">
+  1022	                            <option value="">患者を選択してください</option>
+  1023	                        </select>
+  1024	                    </div>
+  1025	
+  1026	                    <div id="transferOutPatientInfo" class="hidden bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+  1027	                        <h4 class="font-semibold text-blue-800 mb-2">患者情報</h4>
+  1028	                        <div id="transferOutPatientDetails" class="text-sm text-blue-700"></div>
+  1029	                    </div>
+  1030	
+  1031	                    <div>
+  1032	                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1033	                            転出先病棟 <span class="text-red-500">*</span>
+  1034	                        </label>
+  1035	                        <input type="text" id="transferOutDestination" required 
+  1036	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1037	                            placeholder="例: A病棟、B病棟、3階病棟">
+  1038	                    </div>
+  1039	
+  1040	                    <div>
+  1041	                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1042	                            転出日 <span class="text-red-500">*</span>
+  1043	                        </label>
+  1044	                        <input type="date" id="transferOutDate" required 
+  1045	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+  1046	                    </div>
+  1047	
+  1048	                    <div>
+  1049	                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1050	                            転出理由・備考
+  1051	                        </label>
+  1052	                        <textarea id="transferOutReason" rows="3"
+  1053	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1054	                            placeholder="転出理由や引き継ぎ事項を記入してください"></textarea>
+  1055	                    </div>
+  1056	                </div>
+  1057	
+  1058	                <div class="flex justify-end space-x-3 mt-6">
+  1059	                    <button type="button" onclick="closeTransferOutModal()" 
+  1060	                        class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+  1061	                        キャンセル
+  1062	                    </button>
+  1063	                    <button type="submit" 
+  1064	                        class="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
+  1065	                        <i class="fas fa-arrow-right mr-2"></i>転出処理実行
+  1066	                    </button>
+  1067	                </div>
+  1068	            </form>
+  1069	        </div>
+  1070	    </div>
+  1071	
+  1072	    <!-- 転入モーダル -->
+  1073	    <div id="transferInModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+  1074	        <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+  1075	            <h3 class="text-2xl font-bold text-gray-800 mb-6">
+  1076	                <i class="fas fa-sign-in-alt text-green-600 mr-2"></i>
+  1077	                転入処理
+  1078	            </h3>
+  1079	            <form id="transferInForm">
+  1080	                <div class="space-y-4">
+  1081	                    <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded mb-4">
+  1082	                        <p class="text-sm text-green-700">
+  1083	                            <i class="fas fa-info-circle mr-2"></i>
+  1084	                            他病棟から転入してくる患者の情報を入力してください
+  1085	                        </p>
+  1086	                    </div>
+  1087	
+  1088	                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1089	                        <div>
+  1090	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1091	                                患者番号 <span class="text-red-500">*</span>
+  1092	                            </label>
+  1093	                            <input type="text" id="transferInPatientId" required 
+  1094	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1095	                                placeholder="例: P0001">
+  1096	                        </div>
+  1097	
+  1098	                        <div>
+  1099	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1100	                                患者名 <span class="text-red-500">*</span>
+  1101	                            </label>
+  1102	                            <input type="text" id="transferInName" required 
+  1103	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1104	                                placeholder="例: 山田 太郎">
+  1105	                        </div>
+  1106	
+  1107	                        <div>
+  1108	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1109	                                生年月日 <span class="text-red-500">*</span>
+  1110	                            </label>
+  1111	                            <input type="date" id="transferInDateOfBirth" required 
+  1112	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+  1113	                        </div>
+  1114	
+  1115	                        <div>
+  1116	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1117	                                病名 <span class="text-red-500">*</span>
+  1118	                            </label>
+  1119	                            <input type="text" id="transferInDisease" required 
+  1120	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1121	                                placeholder="例: 統合失調症">
+  1122	                        </div>
+  1123	
+  1124	                        <div>
+  1125	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1126	                                主治医 <span class="text-red-500">*</span>
+  1127	                            </label>
+  1128	                            <input type="text" id="transferInPrimaryPhysician" required 
+  1129	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1130	                                placeholder="例: 田中 医師">
+  1131	                        </div>
+  1132	
+  1133	                        <div>
+  1134	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1135	                                元の入院日 <span class="text-red-500">*</span>
+  1136	                            </label>
+  1137	                            <input type="date" id="transferInAdmissionDate" required 
+  1138	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+  1139	                            <p class="text-xs text-gray-500 mt-1">最初に入院した日付を入力してください</p>
+  1140	                        </div>
+  1141	
+  1142	                        <div>
+  1143	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1144	                                入院種別 <span class="text-red-500">*</span>
+  1145	                            </label>
+  1146	                            <select id="transferInAdmissionType" required 
+  1147	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+  1148	                                <option value="新規入院">新規入院</option>
+  1149	                                <option value="急性増悪">急性増悪（新規入院扱い）</option>
+  1150	                                <option value="再入院">再入院（出来高）</option>
+  1151	                            </select>
+  1152	                        </div>
+  1153	
+  1154	                        <div>
+  1155	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1156	                                入院形態 <span class="text-red-500">*</span>
+  1157	                            </label>
+  1158	                            <select id="transferInAdmissionForm" required 
+  1159	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+  1160	                                <option value="任意入院">任意入院</option>
+  1161	                                <option value="医療保護入院">医療保護入院</option>
+  1162	                                <option value="措置入院">措置入院</option>
+  1163	                            </select>
+  1164	                        </div>
+  1165	
+  1166	                        <div>
+  1167	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1168	                                チーム <span class="text-red-500">*</span>
+  1169	                            </label>
+  1170	                            <select id="transferInTeam" required 
+  1171	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+  1172	                                <option value="1A">チーム1A</option>
+  1173	                                <option value="1B">チーム1B</option>
+  1174	                            </select>
+  1175	                        </div>
+  1176	
+  1177	                        <div>
+  1178	                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1179	                                受け持ち看護師
+  1180	                            </label>
+  1181	                            <input type="text" id="transferInAssignedNurse" 
+  1182	                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1183	                                placeholder="例: 山田 看護師">
+  1184	                        </div>
+  1185	                    </div>
+  1186	
+  1187	                    <div>
+  1188	                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1189	                            転入元病棟 <span class="text-red-500">*</span>
+  1190	                        </label>
+  1191	                        <input type="text" id="transferInSource" required 
+  1192	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1193	                            placeholder="例: A病棟、B病棟、3階病棟">
+  1194	                    </div>
+  1195	
+  1196	                    <div>
+  1197	                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1198	                            転入日 <span class="text-red-500">*</span>
+  1199	                        </label>
+  1200	                        <input type="date" id="transferInDate" required 
+  1201	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+  1202	                    </div>
+  1203	
+  1204	                    <div>
+  1205	                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+  1206	                            転入理由・引継事項
+  1207	                        </label>
+  1208	                        <textarea id="transferInReason" rows="3"
+  1209	                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+  1210	                            placeholder="転入理由や引き継ぎ事項を記入してください"></textarea>
+  1211	                    </div>
+  1212	                </div>
+  1213	
+  1214	                <div class="flex justify-end space-x-3 mt-6">
+  1215	                    <button type="button" onclick="closeTransferInModal()" 
+  1216	                        class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+  1217	                        キャンセル
+  1218	                    </button>
+  1219	                    <button type="submit" 
+  1220	                        class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+  1221	                        <i class="fas fa-arrow-left mr-2"></i>転入処理実行
+  1222	                    </button>
+  1223	                </div>
+  1224	            </form>
+  1225	        </div>
+  1226	    </div>
+  1227	
+  1228	    </div><!-- mainContent の終了 -->
+  1229	
+  1230	    <script src="患者管理_プログラム.js"></script>
+  1231	</body>
+  1232	</html>
+  1233	
