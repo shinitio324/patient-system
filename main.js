@@ -18,6 +18,70 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // ===============================
+// 和暦 ⇔ 西暦 変換
+// ===============================
+
+// 元号の開始年（西暦）
+const WAREKI_ERAS = {
+    'R': 2018,  // 令和: 2019年5月1日開始 → 令和1年=2019年
+    'H': 1988,  // 平成: 1989年1月8日開始 → 平成1年=1989年
+    'S': 1925,  // 昭和: 1926年12月25日開始 → 昭和1年=1926年
+    'T': 1911,  // 大正: 1912年7月30日開始 → 大正1年=1912年
+    'M': 1867   // 明治: 1868年1月25日開始 → 明治1年=1868年
+};
+
+// 和暦 → 西暦変換してhiddenフィールドにセット
+function warekiToDate(fieldId) {
+    const era = document.getElementById(fieldId + '_era').value;
+    const year = parseInt(document.getElementById(fieldId + '_year').value);
+    const month = parseInt(document.getElementById(fieldId + '_month').value);
+    const day = parseInt(document.getElementById(fieldId + '_day').value);
+    const hidden = document.getElementById(fieldId);
+
+    if (!era || !year || !month || !day) {
+        hidden.value = '';
+        return;
+    }
+
+    const seireki = WAREKI_ERAS[era] + year;
+    const mm = String(month).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    hidden.value = `${seireki}-${mm}-${dd}`;
+}
+
+// 西暦 → 和暦変換してフォームにセット
+function dateToWareki(fieldId, dateStr) {
+    if (!dateStr) return;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return;
+    const seireki = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+
+    let era = '', warekiYear = 0;
+    if (seireki >= 2019) { era = 'R'; warekiYear = seireki - 2018; }
+    else if (seireki >= 1989) { era = 'H'; warekiYear = seireki - 1988; }
+    else if (seireki >= 1926) { era = 'S'; warekiYear = seireki - 1925; }
+    else if (seireki >= 1912) { era = 'T'; warekiYear = seireki - 1911; }
+    else if (seireki >= 1868) { era = 'M'; warekiYear = seireki - 1867; }
+    else return;
+
+    const eraEl = document.getElementById(fieldId + '_era');
+    const yearEl = document.getElementById(fieldId + '_year');
+    const monthEl = document.getElementById(fieldId + '_month');
+    const dayEl = document.getElementById(fieldId + '_day');
+    const hidden = document.getElementById(fieldId);
+
+    if (eraEl) eraEl.value = era;
+    if (yearEl) yearEl.value = warekiYear;
+    if (monthEl) monthEl.value = month;
+    if (dayEl) dayEl.value = day;
+    if (hidden) hidden.value = dateStr;
+}
+
+
+
+// ===============================
 // ログイン認証
 // ===============================
 
@@ -593,10 +657,10 @@ function editPatient(id) {
     document.getElementById('editId').value = patient.id;
     document.getElementById('editPatientId').value = patient.patientId;
     document.getElementById('editName').value = patient.name;
-    document.getElementById('editDateOfBirth').value = patient.dateOfBirth;
+    dateToWareki('editDateOfBirth', patient.dateOfBirth);
     document.getElementById('editDisease').value = patient.disease;
     document.getElementById('editPrimaryPhysician').value = patient.primaryPhysician;
-    document.getElementById('editAdmissionDate').value = patient.admissionDate;
+    dateToWareki('editAdmissionDate', patient.admissionDate);
     document.getElementById('editAdmissionType').value = patient.admissionType;
     document.getElementById('editAdmissionForm').value = patient.admissionForm;
     document.getElementById('editTeam').value = patient.team;
@@ -1124,6 +1188,19 @@ function incrementDailyCount(team, type) {
 
 function resetForm() {
     document.getElementById('patientForm').reset();
+    // 和暦フィールドもリセット
+    ['dateOfBirth', 'admissionDate'].forEach(id => {
+        const era = document.getElementById(id + '_era');
+        const year = document.getElementById(id + '_year');
+        const month = document.getElementById(id + '_month');
+        const day = document.getElementById(id + '_day');
+        const hidden = document.getElementById(id);
+        if (era) era.value = '';
+        if (year) year.value = '';
+        if (month) month.value = '';
+        if (day) day.value = '';
+        if (hidden) hidden.value = '';
+    });
 }
 
 // ===============================
