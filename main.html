@@ -738,6 +738,29 @@
 
         <!-- 一括インポートタブ -->
         <div id="import-tab" class="tab-content">
+
+        <!-- Excel一括登録セクション -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6 border border-orange-200">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-file-excel text-orange-600 text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-800">既存データの初期化・一括登録</h3>
+                        <p class="text-xs text-gray-500">現在のデータを削除し、Excelデータ（2024年2月〜）を一括登録します</p>
+                    </div>
+                </div>
+                <button onclick="showClearAllModal()"
+                    class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-bold flex items-center gap-2">
+                    <i class="fas fa-sync-alt"></i> データ初期化・一括登録
+                </button>
+            </div>
+            <div class="bg-orange-50 rounded-lg p-3 text-xs text-orange-700">
+                <p><strong>登録対象：</strong>2024年2月1日以降の入院患者 412件（入院中77件 / 退院済335件）</p>
+            </div>
+        </div>
+
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-2xl font-bold text-gray-800 mb-6">一括インポート</h2>
                 
@@ -1694,6 +1717,89 @@
             <button onclick="executePrintChart()"
                 class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold">
                 <i class="fas fa-print mr-1"></i>印刷する
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ========== 削除確認モーダル ========== -->
+<div id="deleteConfirmModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-8">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-gray-800">患者情報の削除</h3>
+                <p class="text-sm text-gray-500">この操作は取り消せません</p>
+            </div>
+        </div>
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-5">
+            <p class="text-sm font-semibold text-gray-700 mb-1">削除対象：</p>
+            <p id="deleteTargetName" class="text-base font-bold text-red-700"></p>
+        </div>
+        <div class="mb-5">
+            <label class="block text-sm font-semibold text-gray-700 mb-2">削除理由 <span class="text-red-500">*</span></label>
+            <select id="deleteReasonSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300">
+                <option value="">-- 削除理由を選択してください --</option>
+                <option value="登録間違い（患者名）">登録間違い（患者名）</option>
+                <option value="登録間違い（患者ID）">登録間違い（患者ID）</option>
+                <option value="登録間違い（入院日）">登録間違い（入院日）</option>
+                <option value="登録間違い（その他）">登録間違い（その他）</option>
+                <option value="重複登録">重複登録</option>
+                <option value="テストデータ">テストデータ</option>
+                <option value="その他">その他</option>
+            </select>
+            <input type="text" id="deleteReasonOther" placeholder="理由を入力（その他の場合）"
+                class="mt-2 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm hidden focus:outline-none focus:ring-2 focus:ring-red-300">
+        </div>
+        <div class="flex gap-3 justify-end">
+            <button onclick="closeDeleteModal()"
+                class="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-semibold">
+                キャンセル
+            </button>
+            <button onclick="executeDelete()"
+                class="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-bold flex items-center gap-2">
+                <i class="fas fa-trash"></i> 削除する
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 全データ初期化モーダル ========== -->
+<div id="clearAllModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-8">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-database text-orange-600 text-xl"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-gray-800">データ初期化</h3>
+                <p class="text-sm text-gray-500">既存データを全削除して新しいデータを登録</p>
+            </div>
+        </div>
+        <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-5 text-sm text-orange-800">
+            <p class="font-bold mb-1">⚠️ 注意</p>
+            <ul class="list-disc ml-4 space-y-1">
+                <li>現在登録されている全患者データが削除されます</li>
+                <li>Excelファイルから読み込んだデータに置き換わります</li>
+                <li>この操作は取り消せません</li>
+            </ul>
+        </div>
+        <p class="text-sm text-gray-700 mb-5">「確認」と入力してから実行ボタンを押してください：</p>
+        <input type="text" id="clearConfirmInput" placeholder="確認"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-5 focus:outline-none focus:ring-2 focus:ring-orange-300">
+        <div id="clearAllStatus" class="mb-3 text-sm text-gray-600 hidden"></div>
+        <div class="flex gap-3 justify-end">
+            <button onclick="closeClearAllModal()"
+                class="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-semibold">
+                キャンセル
+            </button>
+            <button onclick="executeClearAndImport()"
+                id="clearExecBtn"
+                class="px-5 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-bold flex items-center gap-2">
+                <i class="fas fa-sync-alt"></i> 初期化・登録実行
             </button>
         </div>
     </div>
