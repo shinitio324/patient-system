@@ -711,7 +711,8 @@ function renderPatientsList() {
             <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">${patient.status}</span></td>
             <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                 <button onclick="editPatient('${patient.id}')" class="text-blue-600 hover:text-blue-900"><i class="fas fa-edit"></i> 編集</button>
-                <button onclick="deletePatient('${patient.id}')" class="text-red-600 hover:text-red-900"><i class="fas fa-trash"></i> 削除</button>
+                <button onclick="printPatientChart('${patient.id}')" class="text-indigo-600 hover:text-indigo-900 ml-1"><i class="fas fa-print"></i> 印刷</button>
+                <button onclick="deletePatient('${patient.id}')" class="text-red-600 hover:text-red-900 ml-1"><i class="fas fa-trash"></i> 削除</button>
             </td>
         </tr>`;
     });
@@ -1965,3 +1966,228 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+
+// ===============================
+// 印刷機能
+// ===============================
+
+// 一覧印刷
+function printPatientList() {
+    const searchTerm = document.getElementById('searchInput') ? document.getElementById('searchInput').value : '';
+    const teamFilter = document.getElementById('teamFilter') ? document.getElementById('teamFilter').value : '';
+    const statusFilter = document.getElementById('statusFilter') ? document.getElementById('statusFilter').value : '';
+    const admissionFormFilter = document.getElementById('admissionFormFilter') ? document.getElementById('admissionFormFilter').value : '';
+
+    let filtered = allPatients;
+    if (searchTerm) filtered = filtered.filter(p => p.patientId.toLowerCase().includes(searchTerm.toLowerCase()) || p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    if (teamFilter) filtered = filtered.filter(p => p.team === teamFilter);
+    if (statusFilter) filtered = filtered.filter(p => p.status === statusFilter);
+    if (admissionFormFilter) filtered = filtered.filter(p => p.admissionForm === admissionFormFilter);
+
+    const now = new Date().toLocaleString('ja-JP');
+    const filterDesc = [
+        searchTerm ? `検索: ${searchTerm}` : '',
+        teamFilter ? `チーム: ${teamFilter}` : '',
+        statusFilter ? `ステータス: ${statusFilter}` : '',
+        admissionFormFilter ? `入院形態: ${admissionFormFilter}` : ''
+    ].filter(Boolean).join(' / ') || 'フィルターなし（全件）';
+
+    let rows = '';
+    filtered.forEach((p, i) => {
+        const stayDays = calculateAdmissionPeriod(p.admissionDate, p.dischargeDate || null);
+        rows += `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'}">
+            <td>${p.patientId}</td>
+            <td>${p.name}</td>
+            <td>${p.team}</td>
+            <td>${p.disease}</td>
+            <td>${p.admissionForm}</td>
+            <td>${p.admissionType}</td>
+            <td>${p.primaryPhysician}</td>
+            <td>${p.assignedNurse || '-'}</td>
+            <td>${formatDate(p.admissionDate)}</td>
+            <td>${p.dischargeDate ? formatDate(p.dischargeDate) : '-'}</td>
+            <td style="text-align:center;font-weight:bold">${stayDays}日</td>
+            <td style="text-align:center"><span style="padding:2px 8px;border-radius:9999px;font-size:11px;background:${p.status==='入院中'?'#d1fae5':'#f3f4f6'};color:${p.status==='入院中'?'#065f46':'#374151'}">${p.status}</span></td>
+        </tr>`;
+    });
+
+    const printHtml = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<title>患者一覧 ${now}</title>
+<style>
+  body { font-family: 'Noto Sans JP', sans-serif; font-size: 10pt; margin: 16mm; color: #111; }
+  h1 { font-size: 16pt; margin-bottom: 2px; }
+  .sub { font-size: 9pt; color: #555; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  th { background: #1e3a5f; color: #fff; padding: 5px 6px; text-align: left; }
+  td { padding: 4px 6px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+  @media print { @page { size: A4 landscape; margin: 12mm; } }
+</style></head><body>
+<h1>🏥 患者情報管理システム — 患者一覧</h1>
+<p class="sub">印刷日時: ${now}　|　絞り込み: ${filterDesc}　|　件数: ${filtered.length}件</p>
+<table>
+<thead><tr>
+  <th>患者番号</th><th>患者名</th><th>チーム</th><th>病名</th>
+  <th>入院形態</th><th>入院種別</th><th>主治医</th><th>担当NS</th>
+  <th>入院日</th><th>退院日</th><th>入院日数</th><th>状態</th>
+</tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+    const win = window.open('', '_blank', 'width=1000,height=700');
+    win.document.write(printHtml);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 500);
+}
+
+// 個別カルテ印刷（プレビューモーダル表示）
+let _printTargetPatient = null;
+
+function printPatientChart(id) {
+    const patient = allPatients.find(p => p.id === id);
+    if (!patient) return;
+    _printTargetPatient = patient;
+
+    const stayDays = calculateAdmissionPeriod(patient.admissionDate, patient.dischargeDate || null);
+    const stayNote = formatStayDaysNote(stayDays);
+    const isAdmitted = patient.status === '入院中';
+    const admissionFormColors = {
+        '任意入院': '#d1fae5',
+        '医療保護入院': '#dbeafe',
+        '措置入院': '#fee2e2'
+    };
+    const formBg = admissionFormColors[patient.admissionForm] || '#f3f4f6';
+
+    const preview = `
+    <div style="font-family:'Noto Sans JP',sans-serif;font-size:11pt;color:#111;">
+      <!-- ヘッダー -->
+      <div style="text-align:center;border-bottom:3px solid #1e3a5f;padding-bottom:10px;margin-bottom:14px;">
+        <div style="font-size:17pt;font-weight:bold;color:#1e3a5f;">🏥 患者情報管理システム</div>
+        <div style="font-size:13pt;font-weight:bold;margin-top:4px;">個別カルテ</div>
+        <div style="font-size:9pt;color:#888;margin-top:2px;">印刷日時: ${new Date().toLocaleString('ja-JP')}</div>
+      </div>
+      <!-- 基本情報 -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+        <tr>
+          <td style="width:50%;vertical-align:top;padding:4px 8px 4px 0;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr><td colspan="2" style="background:#1e3a5f;color:#fff;padding:5px 8px;font-weight:bold;font-size:10pt;">基本情報</td></tr>
+              <tr style="background:#f9fafb"><td style="padding:5px 8px;color:#555;width:40%">患者番号</td><td style="padding:5px 8px;font-weight:bold">${patient.patientId}</td></tr>
+              <tr><td style="padding:5px 8px;color:#555">患者名</td><td style="padding:5px 8px;font-weight:bold;font-size:13pt">${patient.name}</td></tr>
+              <tr style="background:#f9fafb"><td style="padding:5px 8px;color:#555">生年月日</td><td style="padding:5px 8px">${formatDate(patient.dateOfBirth)}</td></tr>
+              <tr><td style="padding:5px 8px;color:#555">チーム</td><td style="padding:5px 8px"><span style="padding:2px 10px;border-radius:9999px;background:${patient.team==='1A'?'#dbeafe':'#ede9fe'};font-weight:bold">${patient.team}</span></td></tr>
+              <tr style="background:#f9fafb"><td style="padding:5px 8px;color:#555">ステータス</td><td style="padding:5px 8px"><span style="padding:2px 10px;border-radius:9999px;background:${isAdmitted?'#d1fae5':'#f3f4f6'};font-weight:bold;color:${isAdmitted?'#065f46':'#374151'}">${patient.status}</span></td></tr>
+            </table>
+          </td>
+          <td style="width:50%;vertical-align:top;padding:4px 0 4px 8px;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr><td colspan="2" style="background:#1e3a5f;color:#fff;padding:5px 8px;font-weight:bold;font-size:10pt;">担当医・看護師</td></tr>
+              <tr style="background:#f9fafb"><td style="padding:5px 8px;color:#555;width:40%">主治医</td><td style="padding:5px 8px;font-weight:bold">${patient.primaryPhysician}</td></tr>
+              <tr><td style="padding:5px 8px;color:#555">担当NS</td><td style="padding:5px 8px;font-weight:bold">${patient.assignedNurse || '—'}</td></tr>
+              <tr style="background:#f9fafb"><td style="padding:5px 8px;color:#555">病名</td><td style="padding:5px 8px">${patient.disease}</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <!-- 入院情報 -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+        <tr><td colspan="4" style="background:#1e3a5f;color:#fff;padding:5px 8px;font-weight:bold;font-size:10pt;">入院情報</td></tr>
+        <tr style="background:#f9fafb">
+          <td style="padding:5px 8px;color:#555;width:25%">入院日</td>
+          <td style="padding:5px 8px;font-weight:bold">${formatDate(patient.admissionDate)}</td>
+          <td style="padding:5px 8px;color:#555;width:25%">退院日</td>
+          <td style="padding:5px 8px;font-weight:bold">${patient.dischargeDate ? formatDate(patient.dischargeDate) : (isAdmitted ? '<span style="color:#059669">入院中</span>' : '—')}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 8px;color:#555">入院形態</td>
+          <td style="padding:5px 8px"><span style="padding:2px 10px;border-radius:9999px;background:${formBg}">${patient.admissionForm}</span></td>
+          <td style="padding:5px 8px;color:#555">入院種別</td>
+          <td style="padding:5px 8px">${patient.admissionType}</td>
+        </tr>
+        <tr style="background:#f9fafb">
+          <td style="padding:5px 8px;color:#555">入院日数</td>
+          <td colspan="3" style="padding:5px 8px;font-weight:bold;font-size:13pt;color:#1e3a5f">${stayDays}日 <span style="font-size:9pt;font-weight:normal;color:#888">(${stayNote}${isAdmitted ? ' 経過中' : ''})</span></td>
+        </tr>
+      </table>
+      <!-- 備考欄 -->
+      <table style="width:100%;border-collapse:collapse;">
+        <tr><td style="background:#1e3a5f;color:#fff;padding:5px 8px;font-weight:bold;font-size:10pt;">備考</td></tr>
+        <tr><td style="padding:20px 8px;border:1px solid #e5e7eb;height:60px;vertical-align:top;color:#999;font-size:9pt;">（手書き記載欄）</td></tr>
+      </table>
+    </div>`;
+
+    document.getElementById('printChartPreview').innerHTML = preview;
+    document.getElementById('printChartModal').classList.remove('hidden');
+}
+
+function closePrintChartModal() {
+    document.getElementById('printChartModal').classList.add('hidden');
+    _printTargetPatient = null;
+}
+
+function executePrintChart() {
+    const patient = _printTargetPatient;
+    if (!patient) return;
+    const stayDays = calculateAdmissionPeriod(patient.admissionDate, patient.dischargeDate || null);
+    const stayNote = formatStayDaysNote(stayDays);
+    const isAdmitted = patient.status === '入院中';
+    const admissionFormColors = { '任意入院': '#d1fae5', '医療保護入院': '#dbeafe', '措置入院': '#fee2e2' };
+    const formBg = admissionFormColors[patient.admissionForm] || '#f3f4f6';
+
+    const printHtml = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<title>個別カルテ ${patient.name}</title>
+<style>
+  body { font-family: 'Noto Sans JP', sans-serif; font-size: 11pt; margin: 18mm 20mm; color: #111; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  th { background: #1e3a5f; color: #fff; padding: 6px 10px; text-align: left; font-size: 10pt; }
+  td { padding: 5px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+  tr:nth-child(odd) td { background: #f9fafb; }
+  .badge { padding: 2px 10px; border-radius: 9999px; font-size: 10pt; font-weight: bold; }
+  .remarks { border: 1px solid #d1d5db; height: 80px; }
+  @media print { @page { size: A4 portrait; margin: 18mm 20mm; } }
+</style></head><body>
+<div style="text-align:center;border-bottom:3px solid #1e3a5f;padding-bottom:10px;margin-bottom:16px;">
+  <div style="font-size:18pt;font-weight:bold;color:#1e3a5f;">🏥 患者情報管理システム</div>
+  <div style="font-size:14pt;font-weight:bold;margin-top:4px;">個別カルテ</div>
+  <div style="font-size:9pt;color:#888;margin-top:2px;">印刷日時: ${new Date().toLocaleString('ja-JP')}</div>
+</div>
+<table>
+  <tr><th colspan="4">基本情報</th></tr>
+  <tr><td style="color:#555;width:20%">患者番号</td><td style="font-weight:bold;width:30%">${patient.patientId}</td>
+      <td style="color:#555;width:20%">チーム</td><td><span class="badge" style="background:${patient.team==='1A'?'#dbeafe':'#ede9fe'}">${patient.team}</span></td></tr>
+  <tr><td style="color:#555">患者名</td><td style="font-weight:bold;font-size:13pt" colspan="3">${patient.name}</td></tr>
+  <tr><td style="color:#555">生年月日</td><td colspan="3">${formatDate(patient.dateOfBirth)}</td></tr>
+  <tr><td style="color:#555">ステータス</td><td colspan="3"><span class="badge" style="background:${isAdmitted?'#d1fae5':'#f3f4f6'};color:${isAdmitted?'#065f46':'#374151'}">${patient.status}</span></td></tr>
+</table>
+<table>
+  <tr><th colspan="4">担当医・看護師 / 病名</th></tr>
+  <tr><td style="color:#555;width:20%">主治医</td><td style="font-weight:bold;width:30%">${patient.primaryPhysician}</td>
+      <td style="color:#555;width:20%">担当NS</td><td style="font-weight:bold">${patient.assignedNurse || '—'}</td></tr>
+  <tr><td style="color:#555">病名</td><td colspan="3">${patient.disease}</td></tr>
+</table>
+<table>
+  <tr><th colspan="4">入院情報</th></tr>
+  <tr><td style="color:#555;width:20%">入院日</td><td style="font-weight:bold;width:30%">${formatDate(patient.admissionDate)}</td>
+      <td style="color:#555;width:20%">退院日</td><td style="font-weight:bold">${patient.dischargeDate ? formatDate(patient.dischargeDate) : (isAdmitted ? '入院中' : '—')}</td></tr>
+  <tr><td style="color:#555">入院形態</td><td><span class="badge" style="background:${formBg}">${patient.admissionForm}</span></td>
+      <td style="color:#555">入院種別</td><td>${patient.admissionType}</td></tr>
+  <tr><td style="color:#555">入院日数</td>
+      <td colspan="3" style="font-weight:bold;font-size:14pt;color:#1e3a5f">${stayDays}日 <span style="font-size:9pt;font-weight:normal;color:#888">(${stayNote}${isAdmitted?' 経過中':''})</span></td></tr>
+</table>
+<table>
+  <tr><th>備考（手書き記載欄）</th></tr>
+  <tr><td class="remarks"></td></tr>
+</table>
+</body></html>`;
+
+    const win = window.open('', '_blank', 'width=800,height=900');
+    win.document.write(printHtml);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 500);
+    closePrintChartModal();
+}

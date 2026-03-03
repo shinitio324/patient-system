@@ -48,6 +48,20 @@
             color: #dc2626;
         }
     </style>
+
+    <!-- 印刷用スタイル -->
+    <style>
+        @media print {
+            /* 非表示にする要素 */
+            nav, header, .tab-btn, #loginSection,
+            #notification, .no-print,
+            button:not(.print-btn) { display: none !important; }
+
+            body { background: white !important; font-size: 11pt; }
+            .tab-content { display: block !important; }
+            .bg-white { box-shadow: none !important; }
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     <!-- ログイン画面 -->
@@ -550,6 +564,13 @@
                     </select>
                 </div>
 
+                <!-- 印刷ボタン -->
+                <div class="flex justify-end mb-3 no-print">
+                    <button onclick="printPatientList()"
+                        class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-semibold shadow">
+                        <i class="fas fa-print"></i> 一覧を印刷
+                    </button>
+                </div>
                 <div id="patientsList" class="overflow-x-auto"></div>
             </div>
         </div>
@@ -1476,6 +1497,30 @@
             </div>
         </div>
     </div>
+
+
+<!-- ========== 個別カルテ印刷モーダル ========== -->
+<div id="printChartModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 no-print">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto p-8">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <i class="fas fa-file-medical text-blue-600"></i> 個別カルテ印刷プレビュー
+            </h3>
+            <button onclick="closePrintChartModal()" class="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+        </div>
+        <div id="printChartPreview" class="border border-gray-200 rounded-lg p-6 bg-white mb-6 text-sm"></div>
+        <div class="flex justify-end gap-3 no-print">
+            <button onclick="closePrintChartModal()"
+                class="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm">
+                キャンセル
+            </button>
+            <button onclick="executePrintChart()"
+                class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold">
+                <i class="fas fa-print mr-1"></i>印刷する
+            </button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>
