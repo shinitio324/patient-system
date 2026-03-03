@@ -527,6 +527,7 @@ function updateDashboard() {
     renderTeamList('team1BList', team1B);
     renderTwoMonthsAlert(twoMonthsPatients);
     renderTwoMonthsPatientsList(twoMonthsPatients);
+    updateDashboardHomecareCards();
 }
 
 function renderTeamList(containerId, patients) {
@@ -740,6 +741,8 @@ function editPatient(id) {
     document.getElementById('editAssignedNurse').value = patient.assignedNurse || '';
     document.getElementById('editStatus').value = patient.status;
     document.getElementById('editDischargeDate').value = patient.dischargeDate || '';
+    const editDestEl = document.getElementById('editDischargeDestination');
+    if (editDestEl) editDestEl.value = patient.transferDestination || '';
     updateEditStayDays(); // 入院日数を即時表示
     document.getElementById('editModal').classList.remove('hidden');
 }
@@ -876,14 +879,19 @@ function confirmDischarge() {
     const dateEl = document.getElementById('dischargeModalDate');
     const today = new Date().toISOString().split('T')[0];
     const dischargeDate = (dateEl && dateEl.value) ? dateEl.value : today;
+    // 退院先を取得
+    const destEl = document.getElementById('dischargeModalDestination');
+    const transferDestination = (destEl && destEl.value) ? destEl.value : '';
     const oldStatus = patient.status;
     patient.status = '退院';
     patient.dischargeDate = dischargeDate;
-    addHistory(patient.patientId, patient.name, '退院処理', 'ステータス', oldStatus, `退院（${formatDate(dischargeDate)}）`);
+    patient.transferDestination = transferDestination;
+    addHistory(patient.patientId, patient.name, '退院処理', 'ステータス', oldStatus,
+        `退院（${formatDate(dischargeDate)}）退院先：${transferDestination || '未設定'}`);
     incrementDailyCount(patient.team === '1A' ? 'team1A' : 'team1B', 'discharge');
     savePatientsToStorage();
     closeDischargeModal();
-    showNotification(`退院処理が完了しました（退院日：${formatDate(dischargeDate)}）`, 'success');
+    showNotification(`退院処理が完了しました（退院日：${formatDate(dischargeDate)}　退院先：${transferDestination || '未設定'}）`, 'success');
 }
 
 // ===============================
@@ -1744,6 +1752,7 @@ function setupTabs() {
             document.getElementById(`${tabId}-tab`).classList.add('active');
             if (tabId === 'charts') updateCharts();
             if (tabId === 'export') updateExportCount();
+        if (tabId === 'homecare') renderHomecareTab();
             if (tabId === 'timeline') renderTimeline();
         });
     });
@@ -1880,6 +1889,8 @@ document.addEventListener('DOMContentLoaded', () => {
         patient.admissionForm = document.getElementById('editAdmissionForm').value;
         patient.status = document.getElementById('editStatus').value;
         patient.dischargeDate = document.getElementById('editDischargeDate').value || null;
+        const destEditEl = document.getElementById('editDischargeDestination');
+        patient.transferDestination = destEditEl ? (destEditEl.value || null) : (patient.transferDestination || null);
         addHistory(patient.patientId, patient.name, '情報更新', '患者情報', oldPatient, patient);
         savePatientsToStorage();
         closeEditModal();
@@ -2190,4 +2201,345 @@ function executePrintChart() {
     win.focus();
     setTimeout(() => { win.print(); }, 500);
     closePrintChartModal();
+}
+
+
+// ===============================
+// 在宅移行・新規率管理
+// ===============================
+
+// 在宅移行として算定できる退院先
+const HOME_CARE_DESTINATIONS = ['自宅', 'グループホーム', '介護老人保健施設', '精神障害者施設'];
+
+// 新規入院として扱う入院種別
+const NEW_ADMISSION_TYPES = ['新規入院', '急性増悪'];
+
+/**
+ * 在宅移行KPIを計算する
+ * @param {Array} patients - 患者リスト
+ * @param {number|string} monthRange - 'current'=当月, 3/6=過去N月, 'all'=全期間
+ * @returns {Object} KPIオブジェクト
+ */
+function calcHomecareKPI(patients, monthRange) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
+
+    // フィルタリング範囲の決定
+    let filterStart = null;
+    let filterEnd = null;
+    if (monthRange === 'current') {
+        filterStart = new Date(currentYear, currentMonth, 1);
+        filterEnd = new Date(currentYear, currentMonth + 1, 0);
+    } else if (typeof monthRange === 'number') {
+        filterStart = new Date(currentYear, currentMonth - monthRange + 1, 1);
+        filterEnd = new Date(currentYear, currentMonth + 1, 0);
+    }
+    // 'all' は filterStart = null のまま
+
+    // 範囲内の入院患者（入院日で絞り込み）
+    function inRange(patient) {
+        if (!filterStart) return true;
+        const admDate = patient.admissionDate ? new Date(patient.admissionDate) : null;
+        if (!admDate) return false;
+        return admDate >= filterStart && admDate <= filterEnd;
+    }
+
+    const targetPatients = patients.filter(inRange);
+
+    // 全入院（対象期間内）
+    const totalAdmitted = targetPatients.length;
+
+    // 新規入院（入院種別が新規入院または急性増悪）
+    const newPatients = targetPatients.filter(p => NEW_ADMISSION_TYPES.includes(p.admissionType));
+    const newCount = newPatients.length;
+    const newRate = totalAdmitted > 0 ? (newCount / totalAdmitted) : null;
+
+    // 退院した新規入院患者
+    const dischargedNew = newPatients.filter(p => p.status === '退院' && p.dischargeDate);
+
+    // 在宅移行実績（退院先が算定対象）
+    const homeCareActual = dischargedNew.filter(p =>
+        HOME_CARE_DESTINATIONS.some(d => p.transferDestination && p.transferDestination.includes(d))
+    );
+    const homeCareCount = homeCareActual.length;
+    const homeCareRate = newCount > 0 ? (homeCareCount / newCount) : null;
+
+    // 90日以内退院（新規入院患者で90日以内に退院）
+    const within90 = dischargedNew.filter(p => {
+        const days = calculateAdmissionPeriod(p.admissionDate, p.dischargeDate);
+        return days <= 90;
+    });
+    const within90Rate = newCount > 0 ? (within90.length / newCount) : null;
+
+    // 現在90日超過の入院中患者（新規・急性増悪）
+    const over90Patients = patients.filter(p =>
+        p.status === '入院中' &&
+        NEW_ADMISSION_TYPES.includes(p.admissionType) &&
+        calculateAdmissionPeriod(p.admissionDate, null) > 90
+    );
+
+    return {
+        totalAdmitted,
+        newCount,
+        newRate,
+        dischargedNewCount: dischargedNew.length,
+        homeCareCount,
+        homeCareRate,
+        within90Count: within90.length,
+        within90Rate,
+        over90Patients,
+        targetPatients,
+        newPatients,
+        dischargedNew,
+        homeCareActual,
+    };
+}
+
+/** パーセント表示 */
+function fmtPct(rate) {
+    if (rate === null || isNaN(rate)) return '-';
+    return Math.round(rate * 100) + '%';
+}
+
+/** 目標達成に応じた色クラス */
+function rateColorClass(rate, target) {
+    if (rate === null) return 'text-gray-500';
+    if (rate >= target) return 'text-emerald-600';
+    if (rate >= target * 0.8) return 'text-amber-600';
+    return 'text-red-600';
+}
+
+/** ダッシュボードのサマリーカードを更新 */
+function updateDashboardHomecareCards() {
+    const kpi = calcHomecareKPI(allPatients, 'current');
+    const newRateEl = document.getElementById('dashNewRate');
+    const homeCareRateEl = document.getElementById('dashHomeCareRate');
+    const rate90El = document.getElementById('dash90DayRate');
+    const over90El = document.getElementById('dashOver90Count');
+    if (newRateEl) {
+        newRateEl.textContent = fmtPct(kpi.newRate);
+        newRateEl.className = 'text-3xl font-bold ' + rateColorClass(kpi.newRate, 0.6);
+    }
+    if (homeCareRateEl) {
+        homeCareRateEl.textContent = fmtPct(kpi.homeCareRate);
+        homeCareRateEl.className = 'text-3xl font-bold ' + rateColorClass(kpi.homeCareRate, 0.4);
+    }
+    if (rate90El) {
+        rate90El.textContent = fmtPct(kpi.within90Rate);
+        rate90El.className = 'text-3xl font-bold ' + rateColorClass(kpi.within90Rate, 0.4);
+    }
+    if (over90El) {
+        over90El.textContent = kpi.over90Patients.length;
+    }
+}
+
+/** 在宅移行タブを描画 */
+function renderHomecareTab() {
+    const rangeSelect = document.getElementById('homecareMonthFilter');
+    let range = rangeSelect ? rangeSelect.value : 'current';
+    if (range !== 'current' && range !== 'all') range = parseInt(range);
+
+    const kpi = calcHomecareKPI(allPatients, range);
+
+    // --- KPIカード更新 ---
+    const set = (id, val, colorFn) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = val;
+        if (colorFn) el.className = 'text-3xl font-bold ' + colorFn;
+    };
+    set('hc_newCount', kpi.newCount);
+    set('hc_newRate', fmtPct(kpi.newRate), rateColorClass(kpi.newRate, 0.6));
+    set('hc_homeCareCount', kpi.homeCareCount);
+    set('hc_homeCareRate', fmtPct(kpi.homeCareRate), rateColorClass(kpi.homeCareRate, 0.4));
+    set('hc_within90Rate', fmtPct(kpi.within90Rate), rateColorClass(kpi.within90Rate, 0.4));
+    set('hc_over90Count', kpi.over90Patients.length);
+
+    // --- 90日超過アラート ---
+    const alertDiv = document.getElementById('hc_over90Alert');
+    const alertList = document.getElementById('hc_over90List');
+    if (kpi.over90Patients.length > 0 && alertDiv && alertList) {
+        alertDiv.classList.remove('hidden');
+        let html = `<table class="min-w-full text-sm">
+            <thead><tr class="bg-red-100">
+                <th class="px-3 py-2 text-left">患者番号</th>
+                <th class="px-3 py-2 text-left">患者名</th>
+                <th class="px-3 py-2 text-left">チーム</th>
+                <th class="px-3 py-2 text-left">入院種別</th>
+                <th class="px-3 py-2 text-left">入院日</th>
+                <th class="px-3 py-2 text-left font-bold text-red-700">入院日数</th>
+                <th class="px-3 py-2 text-left">主治医</th>
+            </tr></thead><tbody>`;
+        kpi.over90Patients
+            .sort((a, b) => calculateAdmissionPeriod(b.admissionDate) - calculateAdmissionPeriod(a.admissionDate))
+            .forEach(p => {
+                const days = calculateAdmissionPeriod(p.admissionDate);
+                html += `<tr class="border-b hover:bg-red-50">
+                    <td class="px-3 py-2 font-medium">${p.patientId}</td>
+                    <td class="px-3 py-2">${p.name}</td>
+                    <td class="px-3 py-2">
+                        <span class="px-2 py-0.5 rounded-full text-xs ${p.team==='1A'?'bg-blue-100 text-blue-800':'bg-purple-100 text-purple-800'}">${p.team}</span>
+                    </td>
+                    <td class="px-3 py-2">${p.admissionType}</td>
+                    <td class="px-3 py-2">${formatDate(p.admissionDate)}</td>
+                    <td class="px-3 py-2 font-bold text-red-700">${days}日 <span class="font-normal text-xs text-gray-500">(${formatStayDaysNote(days)})</span></td>
+                    <td class="px-3 py-2">${p.primaryPhysician}</td>
+                </tr>`;
+            });
+        html += '</tbody></table>';
+        alertList.innerHTML = html;
+    } else if (alertDiv) {
+        alertDiv.classList.add('hidden');
+    }
+
+    // --- 退院先内訳 ---
+    const breakdownDiv = document.getElementById('hc_destinationBreakdown');
+    if (breakdownDiv) {
+        const destCounts = {};
+        const dischargedPatients = allPatients.filter(p => p.status === '退院');
+        dischargedPatients.forEach(p => {
+            const dest = p.transferDestination || '未設定';
+            destCounts[dest] = (destCounts[dest] || 0) + 1;
+        });
+        const total = dischargedPatients.length;
+        const destColors = {
+            '自宅': 'bg-emerald-500',
+            'グループホーム': 'bg-blue-500',
+            '介護老人保健施設': 'bg-teal-500',
+            '精神障害者施設': 'bg-cyan-500',
+            '精神科病院': 'bg-orange-500',
+            '身体科病院': 'bg-red-400',
+            'その他施設': 'bg-purple-400',
+            'その他': 'bg-gray-400',
+            '未設定': 'bg-gray-300'
+        };
+        let html = '';
+        Object.entries(destCounts)
+            .sort((a, b) => b[1] - a[1])
+            .forEach(([dest, cnt]) => {
+                const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
+                const isHomeCare = HOME_CARE_DESTINATIONS.some(d => dest.includes(d));
+                const barColor = destColors[dest] || 'bg-gray-400';
+                html += `<div class="flex items-center gap-2">
+                    <div class="w-32 text-xs text-right ${isHomeCare ? 'font-semibold text-emerald-700' : 'text-gray-600'}">${dest}${isHomeCare ? ' ✓' : ''}</div>
+                    <div class="flex-1 bg-gray-100 rounded-full h-5 relative">
+                        <div class="${barColor} h-5 rounded-full" style="width:${pct}%"></div>
+                    </div>
+                    <div class="w-16 text-xs text-gray-600">${cnt}件 (${pct}%)</div>
+                </div>`;
+            });
+        if (!html) html = '<p class="text-gray-400 text-sm">退院患者データがありません</p>';
+        breakdownDiv.innerHTML = html;
+    }
+
+    // --- 月別在宅移行率グラフ（過去6か月） ---
+    const monthlyDiv = document.getElementById('hc_monthlyChart');
+    if (monthlyDiv) {
+        const now = new Date();
+        let rows = '';
+        for (let i = 5; i >= 0; i--) {
+            const y = new Date(now.getFullYear(), now.getMonth() - i, 1).getFullYear();
+            const m = new Date(now.getFullYear(), now.getMonth() - i, 1).getMonth();
+            const monthKpi = calcHomecareKPI(allPatients, 'custom_' + i);
+            // 月ごとに計算
+            const mStart = new Date(y, m, 1);
+            const mEnd = new Date(y, m + 1, 0);
+            const monthPatients = allPatients.filter(p => {
+                const d = p.admissionDate ? new Date(p.admissionDate) : null;
+                return d && d >= mStart && d <= mEnd;
+            });
+            const mNew = monthPatients.filter(p => NEW_ADMISSION_TYPES.includes(p.admissionType));
+            const mDischarged = mNew.filter(p => p.status === '退院' && p.dischargeDate);
+            const mHomeCare = mDischarged.filter(p =>
+                HOME_CARE_DESTINATIONS.some(d => p.transferDestination && p.transferDestination.includes(d))
+            );
+            const rate = mNew.length > 0 ? (mHomeCare.length / mNew.length) : null;
+            const pct = rate !== null ? Math.round(rate * 100) : 0;
+            const label = `${y}/${String(m + 1).padStart(2, '0')}`;
+            const color = rate === null ? 'bg-gray-200' : (rate >= 0.4 ? 'bg-emerald-500' : rate >= 0.3 ? 'bg-amber-500' : 'bg-red-400');
+            rows += `<div class="flex items-center gap-2">
+                <div class="w-14 text-xs text-right text-gray-600">${label}</div>
+                <div class="flex-1 bg-gray-100 rounded-full h-5 relative">
+                    <div class="${color} h-5 rounded-full" style="width:${Math.max(pct, 2)}%"></div>
+                </div>
+                <div class="w-20 text-xs ${color.includes('emerald') ? 'text-emerald-700 font-bold' : color.includes('amber') ? 'text-amber-700' : 'text-red-600'}">${rate !== null ? pct + '%' : 'データなし'} (${mHomeCare.length}/${mNew.length})</div>
+            </div>`;
+        }
+        monthlyDiv.innerHTML = rows || '<p class="text-gray-400 text-sm">データがありません</p>';
+    }
+
+    // --- 新規入院患者一覧（在宅移行状況） ---
+    const patListDiv = document.getElementById('hc_patientList');
+    if (patListDiv) {
+        const targetList = kpi.newPatients;
+        if (targetList.length === 0) {
+            patListDiv.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">対象患者データがありません</p>';
+        } else {
+            let html = `<table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">患者番号</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">患者名</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">チーム</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">入院種別</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">入院日</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">入院日数</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">退院日</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">退院先</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">在宅移行</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">ステータス</th>
+                </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+
+            targetList
+                .sort((a, b) => new Date(b.admissionDate) - new Date(a.admissionDate))
+                .forEach(p => {
+                    const days = calculateAdmissionPeriod(p.admissionDate, p.dischargeDate || null);
+                    const isAdmitted = p.status === '入院中';
+                    const over90 = isAdmitted && days > 90;
+                    const isHomeCare = p.transferDestination &&
+                        HOME_CARE_DESTINATIONS.some(d => p.transferDestination.includes(d));
+                    const within90Discharged = !isAdmitted && p.dischargeDate && days <= 90;
+                    const rowBg = over90 ? 'bg-red-50' : (isHomeCare ? 'bg-emerald-50' : '');
+                    const daysColor = over90 ? 'text-red-600 font-bold' : (days > 60 ? 'text-amber-600 font-semibold' : 'text-gray-900');
+                    const typeColor = {'新規入院': 'bg-blue-100 text-blue-800', '急性増悪': 'bg-orange-100 text-orange-800'}[p.admissionType] || 'bg-gray-100 text-gray-800';
+                    const statusColor = isAdmitted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
+
+                    html += `<tr class="${rowBg} hover:bg-gray-50">
+                        <td class="px-3 py-2 font-medium">${p.patientId}</td>
+                        <td class="px-3 py-2">${p.name}</td>
+                        <td class="px-3 py-2">
+                            <span class="px-2 py-0.5 rounded-full text-xs ${p.team==='1A'?'bg-blue-100 text-blue-800':'bg-purple-100 text-purple-800'}">${p.team}</span>
+                        </td>
+                        <td class="px-3 py-2">
+                            <span class="px-2 py-0.5 rounded-full text-xs ${typeColor}">${p.admissionType}</span>
+                        </td>
+                        <td class="px-3 py-2">${formatDate(p.admissionDate)}</td>
+                        <td class="px-3 py-2 ${daysColor}">
+                            ${days}日
+                            ${over90 ? '<span class="ml-1 px-1 py-0.5 bg-red-100 text-red-700 text-xs rounded">⚠️90日超</span>' : ''}
+                            ${within90Discharged ? '<span class="ml-1 px-1 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded">90日以内✓</span>' : ''}
+                        </td>
+                        <td class="px-3 py-2 text-gray-600">${p.dischargeDate ? formatDate(p.dischargeDate) : '<span class="text-gray-400">-</span>'}</td>
+                        <td class="px-3 py-2">${p.transferDestination || '<span class="text-gray-400">未設定</span>'}</td>
+                        <td class="px-3 py-2 text-center">
+                            ${isHomeCare ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full font-bold">✓ 算定</span>' :
+                              isAdmitted ? '<span class="px-2 py-0.5 bg-blue-50 text-blue-500 text-xs rounded-full">入院中</span>' :
+                              '<span class="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">対象外</span>'}
+                        </td>
+                        <td class="px-3 py-2">
+                            <span class="px-2 py-0.5 rounded-full text-xs ${statusColor}">${p.status}</span>
+                        </td>
+                    </tr>`;
+                });
+            html += '</tbody></table>';
+            patListDiv.innerHTML = html;
+        }
+    }
+}
+
+/** showTab ヘルパー（ダッシュボードから詳細に遷移） */
+function showTab(tabId) {
+    const btn = document.querySelector(`[data-tab="${tabId}"]`);
+    if (btn) btn.click();
 }
