@@ -422,7 +422,15 @@
                             <label class="block text-sm font-semibold text-gray-700 mb-2">
                                 入院日 <span class="text-red-500">*</span>
                             </label>
-                            <div class="flex items-center gap-1">
+                            <!-- 入力モード切替ボタン -->
+                            <div class="flex gap-2 mb-2">
+                                <button type="button" id="admissionDate_modeWareki" onclick="switchDateMode('admissionDate','wareki')"
+                                    class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white font-semibold focus:outline-none">和暦入力</button>
+                                <button type="button" id="admissionDate_modeCalendar" onclick="switchDateMode('admissionDate','calendar')"
+                                    class="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-700 font-semibold focus:outline-none">カレンダー入力</button>
+                            </div>
+                            <!-- 和暦入力 -->
+                            <div id="admissionDate_warekiBlock" class="flex items-center gap-1">
                                 <select id="admissionDate_era" onchange="warekiToDate('admissionDate')" class="px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm w-20">
                                     <option value="">元号</option>
                                     <option value="R">R（令和）</option>
@@ -437,9 +445,14 @@
                                 <span class="text-gray-500 text-sm">月</span>
                                 <input type="number" id="admissionDate_day" min="1" max="31" placeholder="日" onchange="warekiToDate('admissionDate')" class="w-14 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-center">
                                 <span class="text-gray-500 text-sm">日</span>
-                                <input type="hidden" id="admissionDate" required>
                             </div>
-                            <p class="text-xs text-gray-400 mt-1">例：S52年5月3日 → S・52・5・3</p>
+                            <!-- カレンダー入力 -->
+                            <div id="admissionDate_calendarBlock" class="hidden">
+                                <input type="date" id="admissionDate_calendar" onchange="calendarToHidden('admissionDate')"
+                                    class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                            </div>
+                            <input type="hidden" id="admissionDate" required>
+                            <p class="text-xs text-gray-400 mt-1">和暦例：S52年5月3日 → S・52・5・3</p>
                         </div>
 
                         <div>
@@ -990,24 +1003,34 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">入院日</label>
-                        <div class="flex items-center gap-1">
-                        <select id="editAdmissionDate_era" onchange="warekiToDate('editAdmissionDate')" class="px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm w-20">
-                            <option value="">元号</option>
-                            <option value="R">R（令和）</option>
-                            <option value="H">H（平成）</option>
-                            <option value="S">S（昭和）</option>
-                            <option value="T">T（大正）</option>
-                            <option value="M">M（明治）</option>
-                        </select>
-                        <input type="number" id="editAdmissionDate_year" min="1" max="99" placeholder="年" onchange="warekiToDate('editAdmissionDate')" class="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-center">
-                        <span class="text-gray-500 text-sm">年</span>
-                        <input type="number" id="editAdmissionDate_month" min="1" max="12" placeholder="月" onchange="warekiToDate('editAdmissionDate')" class="w-14 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-center">
-                        <span class="text-gray-500 text-sm">月</span>
-                        <input type="number" id="editAdmissionDate_day" min="1" max="31" placeholder="日" onchange="warekiToDate('editAdmissionDate')" class="w-14 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-center">
-                        <span class="text-gray-500 text-sm">日</span>
+                        <div class="flex gap-2 mb-2">
+                            <button type="button" id="editAdmissionDate_modeWareki" onclick="switchDateMode('editAdmissionDate','wareki')"
+                                class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white font-semibold focus:outline-none">和暦入力</button>
+                            <button type="button" id="editAdmissionDate_modeCalendar" onclick="switchDateMode('editAdmissionDate','calendar')"
+                                class="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-700 font-semibold focus:outline-none">カレンダー入力</button>
+                        </div>
+                        <div id="editAdmissionDate_warekiBlock" class="flex items-center gap-1">
+                            <select id="editAdmissionDate_era" onchange="warekiToDate('editAdmissionDate')" class="px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm w-20">
+                                <option value="">元号</option>
+                                <option value="R">R（令和）</option>
+                                <option value="H">H（平成）</option>
+                                <option value="S">S（昭和）</option>
+                                <option value="T">T（大正）</option>
+                                <option value="M">M（明治）</option>
+                            </select>
+                            <input type="number" id="editAdmissionDate_year" min="1" max="99" placeholder="年" onchange="warekiToDate('editAdmissionDate')" class="w-16 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-center">
+                            <span class="text-gray-500 text-sm">年</span>
+                            <input type="number" id="editAdmissionDate_month" min="1" max="12" placeholder="月" onchange="warekiToDate('editAdmissionDate')" class="w-14 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-center">
+                            <span class="text-gray-500 text-sm">月</span>
+                            <input type="number" id="editAdmissionDate_day" min="1" max="31" placeholder="日" onchange="warekiToDate('editAdmissionDate')" class="w-14 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm text-center">
+                            <span class="text-gray-500 text-sm">日</span>
+                        </div>
+                        <div id="editAdmissionDate_calendarBlock" class="hidden">
+                            <input type="date" id="editAdmissionDate_calendar" onchange="calendarToHidden('editAdmissionDate')"
+                                class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                        </div>
                         <input type="hidden" id="editAdmissionDate" required>
-                    </div>
-                    <p class="text-xs text-gray-400 mt-1">例：S52年5月3日 → S・52・5・3</p>
+                        <p class="text-xs text-gray-400 mt-1">和暦例：S52年5月3日 → S・52・5・3</p>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">入院種別</label>
@@ -1295,5 +1318,30 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="main.js"></script>
+
+    <!-- 退院処理モーダル -->
+    <div id="dischargeModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-sign-out-alt text-red-600 mr-2"></i>退院処理
+            </h3>
+            <div id="dischargeModalPatientInfo" class="bg-red-50 border-l-4 border-red-500 p-3 rounded mb-4 text-sm text-red-800"></div>
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">退院日 <span class="text-red-500">*</span></label>
+                <input type="date" id="dischargeModalDate"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm">
+                <p class="text-xs text-gray-400 mt-1">未入力の場合は本日の日付が設定されます</p>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeDischargeModal()"
+                    class="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm">キャンセル</button>
+                <button type="button" onclick="confirmDischarge()"
+                    class="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+                    <i class="fas fa-check mr-1"></i>退院処理を実行
+                </button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

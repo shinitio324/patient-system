@@ -49,6 +49,46 @@ function warekiToDate(fieldId) {
     hidden.value = `${seireki}-${mm}-${dd}`;
 }
 
+// 入力モード切替（和暦 ↔ カレンダー）
+function switchDateMode(fieldId, mode) {
+    const warekiBlock = document.getElementById(fieldId + '_warekiBlock');
+    const calendarBlock = document.getElementById(fieldId + '_calendarBlock');
+    const btnWareki = document.getElementById(fieldId + '_modeWareki');
+    const btnCalendar = document.getElementById(fieldId + '_modeCalendar');
+    const hidden = document.getElementById(fieldId);
+
+    if (mode === 'wareki') {
+        if (warekiBlock) warekiBlock.classList.remove('hidden');
+        if (calendarBlock) calendarBlock.classList.add('hidden');
+        if (btnWareki) { btnWareki.classList.remove('bg-gray-200','text-gray-700'); btnWareki.classList.add('bg-blue-600','text-white'); }
+        if (btnCalendar) { btnCalendar.classList.remove('bg-blue-600','text-white'); btnCalendar.classList.add('bg-gray-200','text-gray-700'); }
+        // カレンダー値から和暦に変換してセット
+        const calInput = document.getElementById(fieldId + '_calendar');
+        if (calInput && calInput.value) {
+            dateToWareki(fieldId, calInput.value);
+        }
+    } else {
+        if (warekiBlock) warekiBlock.classList.add('hidden');
+        if (calendarBlock) calendarBlock.classList.remove('hidden');
+        if (btnCalendar) { btnCalendar.classList.remove('bg-gray-200','text-gray-700'); btnCalendar.classList.add('bg-blue-600','text-white'); }
+        if (btnWareki) { btnWareki.classList.remove('bg-blue-600','text-white'); btnWareki.classList.add('bg-gray-200','text-gray-700'); }
+        // 和暦からカレンダーに変換してセット
+        if (hidden && hidden.value) {
+            const calInput = document.getElementById(fieldId + '_calendar');
+            if (calInput) calInput.value = hidden.value;
+        }
+    }
+}
+
+// カレンダー入力 → hidden フィールドに反映
+function calendarToHidden(fieldId) {
+    const calInput = document.getElementById(fieldId + '_calendar');
+    const hidden = document.getElementById(fieldId);
+    if (calInput && hidden) {
+        hidden.value = calInput.value;
+    }
+}
+
 // 西暦 → 和暦変換してフォームにセット
 function dateToWareki(fieldId, dateStr) {
     if (!dateStr) return;
@@ -725,18 +765,48 @@ function renderDischargeList() {
     container.innerHTML = html;
 }
 
+// 退院処理モーダル用グローバル変数
+let _dischargeTargetId = null;
+
 function dischargePatient(id) {
     const patient = allPatients.find(p => p.id === id);
     if (!patient) return;
-    if (!confirm(`患者「${patient.name}」を退院処理しますか？`)) return;
-    const oldStatus = patient.status;
+    _dischargeTargetId = id;
+    // 患者情報表示
+    const infoEl = document.getElementById('dischargeModalPatientInfo');
+    if (infoEl) {
+        infoEl.innerHTML = `<strong>${patient.patientId} ${patient.name}</strong>（${patient.team}チーム）<br>病名：${patient.disease}　入院日：${formatDate(patient.admissionDate)}`;
+    }
+    // 退院日をデフォルト本日に設定
     const today = new Date().toISOString().split('T')[0];
+    const dateEl = document.getElementById('dischargeModalDate');
+    if (dateEl) dateEl.value = today;
+    // モーダルを表示
+    const modal = document.getElementById('dischargeModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeDischargeModal() {
+    const modal = document.getElementById('dischargeModal');
+    if (modal) modal.classList.add('hidden');
+    _dischargeTargetId = null;
+}
+
+function confirmDischarge() {
+    if (!_dischargeTargetId) return;
+    const patient = allPatients.find(p => p.id === _dischargeTargetId);
+    if (!patient) return;
+    const dateEl = document.getElementById('dischargeModalDate');
+    const today = new Date().toISOString().split('T')[0];
+    const dischargeDate = (dateEl && dateEl.value) ? dateEl.value : today;
+    const oldStatus = patient.status;
     patient.status = '退院';
-    patient.dischargeDate = today;
-    addHistory(patient.patientId, patient.name, '退院処理', 'ステータス', oldStatus, '退院');
+    patient.dischargeDate = dischargeDate;
+    addHistory(patient.patientId, patient.name, '退院処理', 'ステータス', oldStatus, `退院（${formatDate(dischargeDate)}）`);
     incrementDailyCount(patient.team === '1A' ? 'team1A' : 'team1B', 'discharge');
     savePatientsToStorage();
-    showNotification('退院処理が完了しました', 'success');
+    closeDischargeModal();
+    showNotification(`退院処理が完了しました（退院日：${formatDate(dischargeDate)}）`, 'success');
 }
 
 // ===============================
