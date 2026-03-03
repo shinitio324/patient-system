@@ -914,6 +914,216 @@ function renderHistoryList() {
 }
 
 // ===============================
+// タイムライン
+// ===============================
+
+/**
+ * 全データソース（patients / history / transfers）を統合して
+ * 時系列イベントリストを生成する
+ */
+function buildTimelineEvents() {
+    const events = [];
+
+    // ---- patients から「入院中」「退院済み」イベントを生成 ----
+    allPatients.forEach(p => {
+        const team = p.team || '';
+        // 入院イベント
+        if (p.admissionDate) {
+            events.push({
+                date: p.admissionDate,
+                type: p.admissionType === '再入院' ? '再入院' : '入院',
+                patientId: p.patientId,
+                patientName: p.name,
+                team,
+                detail: `${p.admissionForm} ／ ${p.admissionType}`,
+                subDetail: `主治医：${p.primaryPhysician}${p.assignedNurse ? '　NS：' + p.assignedNurse : ''}`,
+                status: p.status,
+                sortKey: new Date(p.admissionDate + 'T00:00:00').getTime()
+            });
+        }
+        // 退院イベント
+        if (p.dischargeDate) {
+            const stayDays = calculateAdmissionPeriod(p.admissionDate, p.dischargeDate);
+            const stayNote = formatStayDaysNote(stayDays);
+            events.push({
+                date: p.dischargeDate,
+                type: '退院',
+                patientId: p.patientId,
+                patientName: p.name,
+                team,
+                detail: `入院日数：${stayDays}日 ${stayNote}`,
+                subDetail: `入院日：${formatDate(p.admissionDate)}`,
+                status: p.status,
+                sortKey: new Date(p.dischargeDate + 'T23:59:59').getTime()
+            });
+        }
+    });
+
+    // ---- allHistory から「情報更新」「削除」イベントを追加 ----
+    allHistory.forEach(h => {
+        // 新規登録・退院処理はpatients側で生成済みなので情報更新のみ追加
+        if (h.changeType === '情報更新' || h.changeType === '削除') {
+            const p = allPatients.find(pt => pt.patientId === h.patientId);
+            events.push({
+                date: h.changeTimestamp.split('T')[0],
+                type: h.changeType,
+                patientId: h.patientId,
+                patientName: h.patientName,
+                team: p ? p.team : '',
+                detail: h.changedFields || '',
+                subDetail: '',
+                status: '',
+                sortKey: new Date(h.changeTimestamp).getTime()
+            });
+        }
+    });
+
+    // ---- allTransfers から転入・転出イベントを追加 ----
+    allTransfers.forEach(t => {
+        const p = allPatients.find(pt => pt.patientId === t.patientId);
+        events.push({
+            date: t.transferDate,
+            type: t.transferType === '転出' ? '転出' : '転入',
+            patientId: t.patientId,
+            patientName: t.patientName,
+            team: p ? p.team : '',
+            detail: t.transferType === '転出' ? `転出先：${t.destination}` : `転入元：${t.destination}`,
+            subDetail: t.reason ? `備考：${t.reason}` : '',
+            status: '',
+            sortKey: new Date(t.transferDate + 'T12:00:00').getTime()
+        });
+    });
+
+    // 新しい順にソート
+    events.sort((a, b) => b.sortKey - a.sortKey);
+    return events;
+}
+
+/** イベントタイプに応じたスタイル設定を返す */
+function getTimelineEventStyle(type) {
+    const styles = {
+        '入院':    { icon: 'fa-hospital-user',   bg: 'bg-blue-100',   border: 'border-blue-400',   text: 'text-blue-700',   badge: 'bg-blue-500',   label: '入院' },
+        '再入院':  { icon: 'fa-redo',             bg: 'bg-purple-100', border: 'border-purple-400', text: 'text-purple-700', badge: 'bg-purple-500', label: '再入院' },
+        '退院':    { icon: 'fa-sign-out-alt',     bg: 'bg-green-100',  border: 'border-green-400',  text: 'text-green-700',  badge: 'bg-green-500',  label: '退院' },
+        '転出':    { icon: 'fa-arrow-right',      bg: 'bg-orange-100', border: 'border-orange-400', text: 'text-orange-700', badge: 'bg-orange-500', label: '転出' },
+        '転入':    { icon: 'fa-arrow-left',       bg: 'bg-teal-100',   border: 'border-teal-400',   text: 'text-teal-700',   badge: 'bg-teal-500',   label: '転入' },
+        '情報更新':{ icon: 'fa-pencil-alt',       bg: 'bg-yellow-50',  border: 'border-yellow-300', text: 'text-yellow-700', badge: 'bg-yellow-400', label: '情報更新' },
+        '削除':    { icon: 'fa-trash',            bg: 'bg-red-100',    border: 'border-red-400',    text: 'text-red-700',    badge: 'bg-red-500',    label: '削除' },
+        '新規登録':{ icon: 'fa-user-plus',        bg: 'bg-indigo-100', border: 'border-indigo-400', text: 'text-indigo-700', badge: 'bg-indigo-500', label: '新規登録' },
+    };
+    return styles[type] || { icon: 'fa-circle', bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-700', badge: 'bg-gray-400', label: type };
+}
+
+/** タイムライン描画メイン */
+function renderTimeline() {
+    const container = document.getElementById('timelineContainer');
+    if (!container) return;
+
+    const searchTerm  = (document.getElementById('timelineSearch')?.value || '').toLowerCase();
+    const eventFilter = document.getElementById('timelineEventFilter')?.value || '';
+    const teamFilter  = document.getElementById('timelineTeamFilter')?.value  || '';
+
+    let events = buildTimelineEvents();
+
+    // フィルター適用
+    if (searchTerm) {
+        events = events.filter(e =>
+            e.patientId.toLowerCase().includes(searchTerm) ||
+            e.patientName.toLowerCase().includes(searchTerm)
+        );
+    }
+    if (eventFilter) {
+        events = events.filter(e => {
+            if (eventFilter === '入院') return e.type === '入院' || e.type === '再入院';
+            if (eventFilter === '退院処理') return e.type === '退院';
+            return e.type === eventFilter;
+        });
+    }
+    if (teamFilter) {
+        events = events.filter(e => e.team === teamFilter);
+    }
+
+    if (events.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-16 text-gray-400">
+                <i class="fas fa-stream text-5xl mb-4 block"></i>
+                <p class="text-lg">該当するイベントがありません</p>
+            </div>`;
+        return;
+    }
+
+    // 日付ごとにグループ化
+    const grouped = {};
+    events.forEach(e => {
+        const key = e.date || '不明';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(e);
+    });
+    const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a));
+
+    let html = `<div class="relative">`;
+    // 縦ライン（中央）
+    html += `<div class="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200 z-0 md:left-1/2"></div>`;
+
+    sortedDates.forEach(date => {
+        const dayEvents = grouped[date];
+        const displayDate = formatDate(date);
+        const dayOfWeek = ['日','月','火','水','木','金','土'][new Date(date).getDay()] || '';
+
+        // 日付ラベル（中央固定）
+        html += `
+            <div class="relative flex justify-center mb-2 z-10">
+                <div class="bg-white border border-gray-300 rounded-full px-4 py-1 text-sm font-bold text-gray-600 shadow-sm">
+                    <i class="fas fa-calendar-day mr-1 text-gray-400"></i>${displayDate}（${dayOfWeek}）
+                </div>
+            </div>`;
+
+        dayEvents.forEach((ev, idx) => {
+            const style = getTimelineEventStyle(ev.type);
+            const isLeft = idx % 2 === 0; // PC: 左右交互配置
+
+            html += `
+            <div class="relative flex items-start mb-4 z-10">
+                <!-- モバイル：左寄せ / PC：左右交互 -->
+                <div class="w-full md:w-5/12 ${isLeft ? 'md:mr-auto md:pr-8 md:text-right' : 'md:ml-auto md:pl-8 md:text-left md:order-last'} pl-14 md:pl-0">
+                    <div class="${style.bg} border-l-4 ${style.border} rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow cursor-default">
+                        <!-- ヘッダー行 -->
+                        <div class="flex items-center gap-2 flex-wrap ${isLeft ? 'md:justify-end' : ''}">
+                            <span class="px-2 py-0.5 rounded-full text-xs font-bold text-white ${style.badge}">
+                                <i class="fas ${style.icon} mr-1"></i>${style.label}
+                            </span>
+                            ${ev.team ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${ev.team === '1A' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}">チーム${ev.team}</span>` : ''}
+                        </div>
+                        <!-- 患者名 -->
+                        <div class="mt-1 font-bold text-gray-800 text-base">${ev.patientId} ${ev.patientName}</div>
+                        <!-- 詳細 -->
+                        ${ev.detail    ? `<div class="text-sm ${style.text} mt-1"><i class="fas fa-info-circle mr-1"></i>${ev.detail}</div>` : ''}
+                        ${ev.subDetail ? `<div class="text-xs text-gray-500 mt-0.5">${ev.subDetail}</div>` : ''}
+                    </div>
+                </div>
+
+                <!-- 中央のアイコンドット（PC: 真ん中、モバイル: 左） -->
+                <div class="absolute left-3 md:left-1/2 md:-translate-x-1/2 w-7 h-7 rounded-full ${style.badge} flex items-center justify-center shadow text-white text-xs z-20 top-4 md:top-4">
+                    <i class="fas ${style.icon}"></i>
+                </div>
+
+                <!-- PC: 反対側スペーサー -->
+                <div class="hidden md:block md:w-5/12 ${isLeft ? 'md:order-last' : ''}"></div>
+            </div>`;
+        });
+    });
+
+    html += `</div>`;
+
+    // フッター: 件数表示
+    html += `<div class="text-center text-sm text-gray-400 mt-6 pt-4 border-t border-gray-100">
+        <i class="fas fa-check-circle mr-1"></i>全 ${events.length} 件のイベントを表示
+    </div>`;
+
+    container.innerHTML = html;
+}
+
+// ===============================
 // 転入・転出管理
 // ===============================
 
@@ -1533,6 +1743,7 @@ function setupTabs() {
             document.getElementById(`${tabId}-tab`).classList.add('active');
             if (tabId === 'charts') updateCharts();
             if (tabId === 'export') updateExportCount();
+            if (tabId === 'timeline') renderTimeline();
         });
     });
 }

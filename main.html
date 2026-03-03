@@ -146,6 +146,9 @@
                     <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="history">
                         <i class="fas fa-history mr-2"></i>履歴
                     </button>
+                    <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="timeline">
+                        <i class="fas fa-stream mr-2"></i>タイムライン
+                    </button>
                     <button class="tab-btn px-4 py-3 font-semibold text-gray-600 hover:text-blue-600" data-tab="import">
                         <i class="fas fa-file-import mr-2"></i>一括インポート
                     </button>
@@ -628,6 +631,48 @@
                 </div>
 
                 <div id="historyList" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <!-- タイムラインタブ -->
+        <div id="timeline-tab" class="tab-content">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">
+                    <i class="fas fa-stream text-blue-500 mr-2"></i>患者タイムライン
+                </h2>
+
+                <!-- 検索バー -->
+                <div class="flex flex-col md:flex-row gap-3 mb-6">
+                    <div class="flex-1">
+                        <input type="text" id="timelineSearch"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            placeholder="患者番号または患者名で検索..."
+                            oninput="renderTimeline()">
+                    </div>
+                    <div class="flex gap-2">
+                        <select id="timelineEventFilter"
+                            class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            onchange="renderTimeline()">
+                            <option value="">すべてのイベント</option>
+                            <option value="新規登録">新規登録</option>
+                            <option value="入院">入院</option>
+                            <option value="退院処理">退院</option>
+                            <option value="転出">転出</option>
+                            <option value="転入">転入</option>
+                            <option value="情報更新">情報更新</option>
+                        </select>
+                        <select id="timelineTeamFilter"
+                            class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            onchange="renderTimeline()">
+                            <option value="">全チーム</option>
+                            <option value="1A">チーム1A</option>
+                            <option value="1B">チーム1B</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- タイムライン本体 -->
+                <div id="timelineContainer"></div>
             </div>
         </div>
 
