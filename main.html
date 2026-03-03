@@ -1073,8 +1073,20 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">退院日</label>
-                        <input type="date" id="editDischargeDate" 
+                        <input type="date" id="editDischargeDate"
+                            onchange="updateEditStayDays()"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <!-- 入院日数自動表示 -->
+                    <div id="editStayDaysBox" class="hidden col-span-2">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center gap-3">
+                            <i class="fas fa-calendar-check text-blue-500 text-lg"></i>
+                            <div>
+                                <span class="text-xs text-blue-500 font-semibold">入院日数</span>
+                                <div class="text-2xl font-bold text-blue-700" id="editStayDaysValue">-</div>
+                            </div>
+                            <div class="text-xs text-gray-400 ml-2" id="editStayDaysNote"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="flex justify-end space-x-3 mt-6">
@@ -1329,8 +1341,18 @@
             <div class="mb-4">
                 <label class="block text-sm font-semibold text-gray-700 mb-2">退院日 <span class="text-red-500">*</span></label>
                 <input type="date" id="dischargeModalDate"
+                    onchange="updateDischargeModalStayDays()"
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm">
                 <p class="text-xs text-gray-400 mt-1">未入力の場合は本日の日付が設定されます</p>
+            </div>
+            <!-- 入院日数自動表示 -->
+            <div id="dischargeModalStayDaysBox" class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-3 mb-4">
+                <i class="fas fa-calendar-check text-red-400 text-lg"></i>
+                <div>
+                    <span class="text-xs text-red-400 font-semibold">入院日数</span>
+                    <div class="text-2xl font-bold text-red-600" id="dischargeModalStayDaysValue">-</div>
+                </div>
+                <div class="text-xs text-gray-400 ml-2" id="dischargeModalStayDaysNote"></div>
             </div>
             <div class="flex justify-end gap-3">
                 <button type="button" onclick="closeDischargeModal()"

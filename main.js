@@ -397,6 +397,27 @@ function calculateAdmissionPeriod(admissionDate, dischargeDate = null) {
     return diffDays;
 }
 
+// 入院日数の補足テキスト（〇年〇ヶ月〇日）を返す
+function formatStayDaysNote(days) {
+    if (!days || days <= 0) return '';
+    const years = Math.floor(days / 365);
+    const months = Math.floor((days % 365) / 30);
+    const remDays = days % 30;
+    let parts = [];
+    if (years > 0) parts.push(`${years}年`);
+    if (months > 0) parts.push(`${months}ヶ月`);
+    if (remDays > 0 || parts.length === 0) parts.push(`${remDays}日`);
+    return '（' + parts.join('') + '）';
+}
+
+// 入院日・退院日から入院日数バッジの色クラスを返す
+function getStayDaysColorClass(days) {
+    if (days >= 365) return 'text-red-600';
+    if (days >= 180) return 'text-orange-500';
+    if (days >= 90)  return 'text-yellow-600';
+    return 'text-blue-700';
+}
+
 function calculateDaysSinceDischarge(dischargeDate) {
     const discharge = new Date(dischargeDate);
     const today = new Date();
@@ -658,6 +679,8 @@ function renderPatientsList() {
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">主治医</th>
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">受け持ちNS</th>
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院日</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">退院日</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院日数</th>
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ステータス</th>
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
     </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
@@ -666,6 +689,10 @@ function renderPatientsList() {
         const statusClass = patient.status === '入院中' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
         const typeColor = {'新規入院':'bg-blue-100 text-blue-800','急性増悪':'bg-orange-100 text-orange-800','再入院':'bg-purple-100 text-purple-800'}[patient.admissionType] || 'bg-gray-100 text-gray-800';
         const formColor = {'任意入院':'bg-green-100 text-green-800','医療保護入院':'bg-blue-100 text-blue-800','措置入院':'bg-red-100 text-red-800'}[patient.admissionForm] || 'bg-gray-100 text-gray-800';
+        const stayDays = calculateAdmissionPeriod(patient.admissionDate, patient.dischargeDate || null);
+        const stayColorClass = getStayDaysColorClass(stayDays);
+        const stayNote = formatStayDaysNote(stayDays);
+        const isAdmitted = patient.status === '入院中';
         html += `<tr class="hover:bg-gray-50">
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${patient.patientId}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.name}</td>
@@ -676,6 +703,11 @@ function renderPatientsList() {
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.primaryPhysician}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.assignedNurse || '-'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(patient.admissionDate)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.dischargeDate ? formatDate(patient.dischargeDate) : '<span class="text-gray-400">-</span>'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${stayColorClass}">
+                ${stayDays}日
+                <div class="text-xs font-normal text-gray-400">${stayNote}${isAdmitted ? '<span class="text-green-500 ml-1">経過中</span>' : ''}</div>
+            </td>
             <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">${patient.status}</span></td>
             <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                 <button onclick="editPatient('${patient.id}')" class="text-blue-600 hover:text-blue-900"><i class="fas fa-edit"></i> 編集</button>
@@ -707,6 +739,7 @@ function editPatient(id) {
     document.getElementById('editAssignedNurse').value = patient.assignedNurse || '';
     document.getElementById('editStatus').value = patient.status;
     document.getElementById('editDischargeDate').value = patient.dischargeDate || '';
+    updateEditStayDays(); // 入院日数を即時表示
     document.getElementById('editModal').classList.remove('hidden');
 }
 
@@ -742,11 +775,13 @@ function renderDischargeList() {
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">病名</th>
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院形態</th>
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院日</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院期間</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">現在の入院日数</th>
         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
     </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
     admittedPatients.forEach(patient => {
         const admissionPeriod = calculateAdmissionPeriod(patient.admissionDate);
+        const stayColorClass = getStayDaysColorClass(admissionPeriod);
+        const stayNote = formatStayDaysNote(admissionPeriod);
         const formColor = {'任意入院':'bg-green-100 text-green-800','医療保護入院':'bg-blue-100 text-blue-800','措置入院':'bg-red-100 text-red-800'}[patient.admissionForm] || 'bg-gray-100 text-gray-800';
         html += `<tr class="hover:bg-gray-50">
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${patient.patientId}</td>
@@ -755,7 +790,10 @@ function renderDischargeList() {
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.disease}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${formColor}">${patient.admissionForm}</span></td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(patient.admissionDate)}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${admissionPeriod}日</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${stayColorClass}">
+                ${admissionPeriod}日
+                <div class="text-xs font-normal text-gray-400">${stayNote}<span class="text-green-500 ml-1">経過中</span></div>
+            </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm">
                 <button onclick="dischargePatient('${patient.id}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"><i class="fas fa-sign-out-alt mr-1"></i>退院処理</button>
             </td>
@@ -784,12 +822,50 @@ function dischargePatient(id) {
     // モーダルを表示
     const modal = document.getElementById('dischargeModal');
     if (modal) modal.classList.remove('hidden');
+    // 入院日数を即時表示
+    updateDischargeModalStayDays();
 }
 
 function closeDischargeModal() {
     const modal = document.getElementById('dischargeModal');
     if (modal) modal.classList.add('hidden');
     _dischargeTargetId = null;
+}
+
+// 編集モーダル：入院日数をリアルタイム更新
+function updateEditStayDays() {
+    const admissionDateVal = document.getElementById('editAdmissionDate') ? document.getElementById('editAdmissionDate').value : '';
+    const dischargeDateVal = document.getElementById('editDischargeDate') ? document.getElementById('editDischargeDate').value : '';
+    const box = document.getElementById('editStayDaysBox');
+    const valEl = document.getElementById('editStayDaysValue');
+    const noteEl = document.getElementById('editStayDaysNote');
+    if (!admissionDateVal) { if (box) box.classList.add('hidden'); return; }
+    const days = calculateAdmissionPeriod(admissionDateVal, dischargeDateVal || null);
+    const note = formatStayDaysNote(days);
+    const isAdmitted = !dischargeDateVal;
+    if (box) box.classList.remove('hidden');
+    if (valEl) {
+        valEl.textContent = days + '日';
+        valEl.className = 'text-2xl font-bold ' + getStayDaysColorClass(days);
+    }
+    if (noteEl) noteEl.innerHTML = note + (isAdmitted ? ' <span class="text-green-500">入院中</span>' : ' <span class="text-gray-500">退院済</span>');
+}
+
+// 退院処理モーダル：入院日数をリアルタイム更新
+function updateDischargeModalStayDays() {
+    if (!_dischargeTargetId) return;
+    const patient = allPatients.find(p => p.id === _dischargeTargetId);
+    if (!patient) return;
+    const dischargeDateVal = document.getElementById('dischargeModalDate') ? document.getElementById('dischargeModalDate').value : '';
+    const days = calculateAdmissionPeriod(patient.admissionDate, dischargeDateVal || null);
+    const note = formatStayDaysNote(days);
+    const valEl = document.getElementById('dischargeModalStayDaysValue');
+    const noteEl = document.getElementById('dischargeModalStayDaysNote');
+    if (valEl) {
+        valEl.textContent = days + '日';
+        valEl.className = 'text-2xl font-bold ' + getStayDaysColorClass(days);
+    }
+    if (noteEl) noteEl.textContent = note;
 }
 
 function confirmDischarge() {
