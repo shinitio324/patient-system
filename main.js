@@ -202,6 +202,7 @@ let periodChart = null;
 let admissionTypeChart = null;
 let admissionFormChart = null;
 let currentMode = 'auto';
+let _isEditModalOpen = false; // 編集モーダル開閉フラグ（Firebase更新中の競合防止）
 
 // ===============================
 // Firebaseリアルタイムリスナー設定
@@ -214,60 +215,16 @@ function setupFirebaseListeners() {
             allPatients = Object.values(data);
         } else {
             allPatients = [];
-            // 初期サンプルデータを投入（初回のみ）
-            const samplePatients = [
-                {
-                    id: '1',
-                    patientId: 'P0001',
-                    name: '山田 太郎',
-                    dateOfBirth: '1950-01-15',
-                    disease: '統合失調症',
-                    primaryPhysician: '田中 医師',
-                    admissionDate: '2025-10-01',
-                    dischargeDate: null,
-                    team: '1A',
-                    assignedNurse: '鈴木 NS',
-                    admissionType: '新規入院',
-                    admissionForm: '医療保護入院',
-                    status: '入院中'
-                },
-                {
-                    id: '2',
-                    patientId: 'P0002',
-                    name: '佐藤 花子',
-                    dateOfBirth: '1955-05-20',
-                    disease: '双極性障害',
-                    primaryPhysician: '山田 医師',
-                    admissionDate: '2025-11-15',
-                    dischargeDate: null,
-                    team: '1B',
-                    assignedNurse: '田中 NS',
-                    admissionType: '新規入院',
-                    admissionForm: '任意入院',
-                    status: '入院中'
-                },
-                {
-                    id: '3',
-                    patientId: 'P0003',
-                    name: '鈴木 次郎',
-                    dateOfBirth: '1960-03-10',
-                    disease: 'うつ病',
-                    primaryPhysician: '佐藤 医師',
-                    admissionDate: '2026-01-15',
-                    dischargeDate: '2026-02-01',
-                    team: '1A',
-                    assignedNurse: '高橋 NS',
-                    admissionType: '新規入院',
-                    admissionForm: '任意入院',
-                    status: '退院'
-                }
-            ];
-            savePatientsToStorage(samplePatients);
+            // サンプルデータ自動投入は廃止
+            // （データが空の場合でも既存データを上書きしない）
         }
-        updateDashboard();
-        renderPatientsList();
-        renderDischargeList();
-        renderRecentDischargeList();
+        // 編集モーダルが開いている場合はリスト再描画をスキップ（競合防止）
+        if (!_isEditModalOpen) {
+            updateDashboard();
+            renderPatientsList();
+            renderDischargeList();
+            renderRecentDischargeList();
+        }
     });
 
     // 履歴データのリアルタイム同期
@@ -297,28 +254,52 @@ function setupFirebaseListeners() {
 // ===============================
 
 function savePatientsToStorage(patients) {
+    // 全上書きsetを廃止 → 個別updateで競合防止
     const patientsToSave = patients || allPatients;
-    const patientsObj = {};
-    patientsToSave.forEach(p => { patientsObj[p.id] = p; });
-    db.ref('patients').set(patientsObj);
+    const updates = {};
+    patientsToSave.forEach(p => { updates['patients/' + p.id] = p; });
+    db.ref().update(updates);
+}
+
+// 患者1件だけ保存（編集・退院処理用）
+function savePatientById(patient) {
+    db.ref('patients/' + patient.id).set(patient);
+}
+
+// 患者1件を削除
+function deletePatientById(patientId) {
+    db.ref('patients/' + patientId).remove();
 }
 
 function saveHistoryToStorage() {
-    const historyObj = {};
-    allHistory.forEach(h => { historyObj[h.id] = h; });
-    db.ref('history').set(historyObj);
+    // 全上書き廃止 → 個別updateで競合防止
+    const updates = {};
+    allHistory.forEach(h => { updates['history/' + h.id] = h; });
+    db.ref().update(updates);
+}
+
+// 履歴1件をFirebaseに書き込む（addHistory用）
+function saveHistoryEntry(entry) {
+    db.ref('history/' + entry.id).set(entry);
 }
 
 function saveTransfersToStorage() {
-    const transfersObj = {};
-    allTransfers.forEach(t => { transfersObj[t.id] = t; });
-    db.ref('transfers').set(transfersObj);
+    // 全上書き廃止 → 個別updateで競合防止
+    const updates = {};
+    allTransfers.forEach(t => { updates['transfers/' + t.id] = t; });
+    db.ref().update(updates);
+}
+
+// 転送履歴1件をFirebaseに書き込む
+function saveTransferEntry(entry) {
+    db.ref('transfers/' + entry.id).set(entry);
 }
 
 function saveDailyRecordsToStorage() {
-    const recordsObj = {};
-    allDailyRecords.forEach(r => { recordsObj[r.date.replace(/-/g, '')] = r; });
-    db.ref('dailyRecords').set(recordsObj);
+    // 個別updateで競合防止
+    const updates = {};
+    allDailyRecords.forEach(r => { updates['dailyRecords/' + r.date.replace(/-/g, '')] = r; });
+    db.ref().update(updates);
 }
 
 // ===============================
@@ -327,7 +308,7 @@ function saveDailyRecordsToStorage() {
 
 function addTransferHistory(patientId, patientName, transferType, destination, transferDate, reason) {
     const transferEntry = {
-        id: Date.now().toString(),
+        id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 6),
         patientId,
         patientName,
         transferType,
@@ -337,12 +318,13 @@ function addTransferHistory(patientId, patientName, transferType, destination, t
         timestamp: new Date().toISOString()
     };
     allTransfers.unshift(transferEntry);
-    saveTransfersToStorage();
+    // 全上書きせず1件だけ書き込む
+    saveTransferEntry(transferEntry);
 }
 
 function addHistory(patientId, patientName, changeType, changedFields, oldValue, newValue) {
     const historyEntry = {
-        id: Date.now().toString(),
+        id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 6),
         patientId,
         patientName,
         changeType,
@@ -352,7 +334,8 @@ function addHistory(patientId, patientName, changeType, changedFields, oldValue,
         changeTimestamp: new Date().toISOString()
     };
     allHistory.unshift(historyEntry);
-    saveHistoryToStorage();
+    // 全上書きせず1件だけ書き込む
+    saveHistoryEntry(historyEntry);
 }
 
 // ===============================
@@ -744,10 +727,12 @@ function editPatient(id) {
     const editDestEl = document.getElementById('editDischargeDestination');
     if (editDestEl) editDestEl.value = patient.transferDestination || '';
     updateEditStayDays(); // 入院日数を即時表示
+    _isEditModalOpen = true; // 編集モーダルオープン → Firebase更新中のリスト再描画を停止
     document.getElementById('editModal').classList.remove('hidden');
 }
 
 function closeEditModal() {
+    _isEditModalOpen = false; // 編集モーダルクローズ → リスナー更新を再開
     document.getElementById('editModal').classList.add('hidden');
 }
 
@@ -757,7 +742,8 @@ function deletePatient(id) {
     if (!confirm(`患者「${patient.name}」の情報を削除しますか？`)) return;
     addHistory(patient.patientId, patient.name, '削除', '患者情報', patient, null);
     allPatients = allPatients.filter(p => p.id !== id);
-    savePatientsToStorage();
+    // 全上書きsetではなくremoveで個別削除（競合防止）
+    deletePatientById(id);
     showNotification('患者情報を削除しました', 'success');
 }
 
@@ -826,6 +812,7 @@ function dischargePatient(id) {
     // モーダルを表示
     const modal = document.getElementById('dischargeModal');
     if (modal) modal.classList.remove('hidden');
+    _isEditModalOpen = true; // 退院モーダルオープン → Firebase更新中のリスト再描画を停止
     // 入院日数を即時表示
     updateDischargeModalStayDays();
 }
@@ -834,6 +821,7 @@ function closeDischargeModal() {
     const modal = document.getElementById('dischargeModal');
     if (modal) modal.classList.add('hidden');
     _dischargeTargetId = null;
+    _isEditModalOpen = false; // 退院モーダルクローズ → リスナー更新を再開
 }
 
 // 編集モーダル：入院日数をリアルタイム更新
@@ -889,7 +877,8 @@ function confirmDischarge() {
     addHistory(patient.patientId, patient.name, '退院処理', 'ステータス', oldStatus,
         `退院（${formatDate(dischargeDate)}）退院先：${transferDestination || '未設定'}`);
     incrementDailyCount(patient.team === '1A' ? 'team1A' : 'team1B', 'discharge');
-    savePatientsToStorage();
+    // 全上書きsetではなく退院患者のみ更新（競合防止）
+    savePatientById(patient);
     closeDischargeModal();
     showNotification(`退院処理が完了しました（退院日：${formatDate(dischargeDate)}　退院先：${transferDestination || '未設定'}）`, 'success');
 }
@@ -1608,7 +1597,8 @@ function saveDailyRecord() {
     if (existingIndex >= 0) allDailyRecords[existingIndex] = record;
     else allDailyRecords.push(record);
     allDailyRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
-    saveDailyRecordsToStorage();
+    // 個別書き込み（競合防止）
+    db.ref('dailyRecords/' + dateStr.replace(/-/g, '')).set(record);
     renderDailyRecordsList();
     showNotification(`${formatDate(dateStr)} の記録を保存しました`, 'success');
 }
@@ -1663,7 +1653,8 @@ function editDailyRecord(dateStr) {
 function deleteDailyRecord(dateStr) {
     if (!confirm(`${formatDate(dateStr)} の記録を削除しますか？`)) return;
     allDailyRecords = allDailyRecords.filter(r => r.date !== dateStr);
-    saveDailyRecordsToStorage();
+    // 全上書きsetではなくremoveで個別削除（競合防止）
+    db.ref('dailyRecords/' + dateStr.replace(/-/g, '')).remove();
     renderDailyRecordsList();
     showNotification(`${formatDate(dateStr)} の記録を削除しました`, 'success');
 }
@@ -1693,22 +1684,15 @@ function exportDailyRecordsCSV() {
 function incrementDailyCount(team, type) {
     if (currentMode !== 'auto') return;
     const today = getDateString(new Date());
-    const record = allDailyRecords.find(r => r.date === today);
-    if (record) {
-        record[team][type]++;
-        saveDailyRecordsToStorage();
-    } else {
-        const newRecord = {
-            date: today,
-            team1A: { admission: 0, discharge: 0, transferIn: 0, transferOut: 0 },
-            team1B: { admission: 0, discharge: 0, transferIn: 0, transferOut: 0 },
-            timestamp: new Date().toISOString()
-        };
-        newRecord[team][type]++;
-        allDailyRecords.push(newRecord);
-        allDailyRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveDailyRecordsToStorage();
-    }
+    const dateKey = today.replace(/-/g, '');
+    const ref = db.ref('dailyRecords/' + dateKey + '/' + team + '/' + type);
+    // Firebase transactionでアトミックにカウントアップ（競合防止）
+    ref.transaction((currentValue) => {
+        return (currentValue || 0) + 1;
+    });
+    // dateとtimestampも保証
+    db.ref('dailyRecords/' + dateKey + '/date').transaction((v) => v || today);
+    db.ref('dailyRecords/' + dateKey + '/timestamp').set(new Date().toISOString());
 }
 
 // ===============================
@@ -1848,7 +1832,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('patientForm').addEventListener('submit', (e) => {
         e.preventDefault();
         const newPatient = {
-            id: Date.now().toString(),
+            id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 6),
             patientId: document.getElementById('patientId').value,
             name: document.getElementById('name').value,
             dateOfBirth: document.getElementById('dateOfBirth').value,
@@ -1864,7 +1848,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         allPatients.push(newPatient);
         addHistory(newPatient.patientId, newPatient.name, '新規登録', '患者情報', null, newPatient);
-        savePatientsToStorage();
+        // 全上書きsetではなく1件のみ書き込む（他端末のデータ保護）
+        savePatientById(newPatient);
         incrementDailyCount(newPatient.team === '1A' ? 'team1A' : 'team1B', 'admission');
         resetForm();
         showNotification('患者情報を登録しました', 'success');
@@ -1892,7 +1877,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const destEditEl = document.getElementById('editDischargeDestination');
         patient.transferDestination = destEditEl ? (destEditEl.value || null) : (patient.transferDestination || null);
         addHistory(patient.patientId, patient.name, '情報更新', '患者情報', oldPatient, patient);
-        savePatientsToStorage();
+        // 全上書きsetではなく編集患者のみ更新（競合防止）
+        savePatientById(patient);
         closeEditModal();
         showNotification('患者情報を更新しました', 'success');
     });
@@ -1920,7 +1906,8 @@ document.addEventListener('DOMContentLoaded', () => {
             addHistory(patient.patientId, patient.name, '転出処理', '転出先', null, destination);
             addTransferHistory(patient.patientId, patient.name, '転出', destination, transferDate, reason);
             incrementDailyCount(patient.team === '1A' ? 'team1A' : 'team1B', 'transferOut');
-            savePatientsToStorage();
+            // 全上書きsetではなく転出患者のみ更新（競合防止）
+            savePatientById(patient);
             closeTransferOutModal();
             showNotification(`${patient.name}の転出処理が完了しました`, 'success');
         });
@@ -1937,7 +1924,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const team = document.getElementById('transferInTeam').value;
             const reason = document.getElementById('transferInReason').value;
             const newPatient = {
-                id: Date.now().toString(),
+                id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 6),
                 patientId: patientId,
                 name: patientName,
                 dateOfBirth: '',
@@ -1954,7 +1941,8 @@ document.addEventListener('DOMContentLoaded', () => {
             allPatients.push(newPatient);
             addTransferHistory(patientId, patientName, '転入', origin, transferDate, reason);
             incrementDailyCount(team === '1A' ? 'team1A' : 'team1B', 'transferIn');
-            savePatientsToStorage();
+            // 全上書きsetではなく転入患者のみ書き込む
+            savePatientById(newPatient);
             closeTransferInModal();
             showNotification(`${patientName}の転入処理が完了しました`, 'success');
         });
