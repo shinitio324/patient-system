@@ -1056,26 +1056,190 @@ function executeImport() {
 }
 
 // ===============================
+// エクスポート共通：フィルター適用済みデータを取得
+// ===============================
+
+function getExportPatients() {
+    const statusFilter = document.getElementById('exportStatusFilter') ? document.getElementById('exportStatusFilter').value : '';
+    const teamFilter   = document.getElementById('exportTeamFilter')   ? document.getElementById('exportTeamFilter').value   : '';
+    const formFilter   = document.getElementById('exportFormFilter')   ? document.getElementById('exportFormFilter').value   : '';
+    let patients = [...allPatients];
+    if (statusFilter) patients = patients.filter(p => p.status === statusFilter);
+    if (teamFilter)   patients = patients.filter(p => p.team   === teamFilter);
+    if (formFilter)   patients = patients.filter(p => p.admissionForm === formFilter);
+    return patients;
+}
+
+// エクスポートタブが表示されるたびに件数を更新
+function updateExportCount() {
+    const el = document.getElementById('exportCount');
+    if (el) el.textContent = getExportPatients().length;
+}
+
 // CSVエクスポート
 // ===============================
 
 function exportCSV() {
-    if (allPatients.length === 0) {
+    const patients = getExportPatients();
+    if (patients.length === 0) {
         showNotification('エクスポートするデータがありません', 'error');
         return;
     }
     let csv = '\uFEFF';
-    csv += '患者番号,患者名,チーム,生年月日,病名,主治医,受け持ち看護師,入院日,退院日,入院種別,入院形態,ステータス,入院期間\n';
-    allPatients.forEach(patient => {
-        const admissionPeriod = calculateAdmissionPeriod(patient.admissionDate, patient.dischargeDate);
-        csv += `${patient.patientId},"${patient.name}",${patient.team},${patient.dateOfBirth},"${patient.disease}","${patient.primaryPhysician}","${patient.assignedNurse || ''}",${patient.admissionDate},${patient.dischargeDate || ''},${patient.admissionType},${patient.admissionForm},${patient.status},${admissionPeriod}\n`;
+    csv += '患者番号,患者名,チーム,生年月日,病名,主治医,受け持ち看護師,入院日,退院日,入院種別,入院形態,ステータス,入院日数,入院期間\n';
+    patients.forEach(patient => {
+        const stayDays = calculateAdmissionPeriod(patient.admissionDate, patient.dischargeDate || null);
+        const stayNote = formatStayDaysNote(stayDays);
+        csv += `${patient.patientId},"${patient.name}",${patient.team},${patient.dateOfBirth},"${patient.disease}","${patient.primaryPhysician}","${patient.assignedNurse || ''}",${patient.admissionDate},${patient.dischargeDate || ''},${patient.admissionType},${patient.admissionForm},${patient.status},${stayDays},"${stayNote}"\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `患者データ_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
-    showNotification('CSVファイルをエクスポートしました', 'success');
+    showNotification(`CSVファイルをエクスポートしました（${patients.length}件）`, 'success');
+}
+
+// Excelエクスポート（SheetJS使用）
+// ===============================
+
+function exportExcel() {
+    const patients = getExportPatients();
+    if (patients.length === 0) {
+        showNotification('エクスポートするデータがありません', 'error');
+        return;
+    }
+
+    if (typeof XLSX === 'undefined') {
+        showNotification('Excelライブラリの読み込みに失敗しました。ページを再読み込みしてください。', 'error');
+        return;
+    }
+
+    // ワークブック作成
+    const wb = XLSX.utils.book_new();
+
+    // ===== シート1: 患者データ =====
+    const headers = [
+        '患者番号','患者名','チーム','生年月日','病名',
+        '主治医','受け持ち看護師','入院日','退院日',
+        '入院種別','入院形態','ステータス','入院日数','入院期間'
+    ];
+
+    const rows = patients.map(p => {
+        const stayDays = calculateAdmissionPeriod(p.admissionDate, p.dischargeDate || null);
+        const stayNote = formatStayDaysNote(stayDays);
+        return [
+            p.patientId,
+            p.name,
+            p.team,
+            p.dateOfBirth    || '',
+            p.disease,
+            p.primaryPhysician,
+            p.assignedNurse  || '',
+            p.admissionDate  || '',
+            p.dischargeDate  || '',
+            p.admissionType,
+            p.admissionForm,
+            p.status,
+            stayDays,
+            stayNote
+        ];
+    });
+
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // 列幅設定
+    ws['!cols'] = [
+        {wch:12},{wch:14},{wch:8},{wch:12},{wch:20},
+        {wch:14},{wch:14},{wch:12},{wch:12},
+        {wch:16},{wch:14},{wch:8},{wch:10},{wch:16}
+    ];
+
+    // ヘッダー行スタイル（背景色・太字）
+    const headerStyle = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '1E40AF' } },
+        alignment: { horizontal: 'center' },
+        border: {
+            top:    { style: 'thin', color: { rgb: '93C5FD' } },
+            bottom: { style: 'thin', color: { rgb: '93C5FD' } },
+            left:   { style: 'thin', color: { rgb: '93C5FD' } },
+            right:  { style: 'thin', color: { rgb: '93C5FD' } }
+        }
+    };
+
+    headers.forEach((_, ci) => {
+        const cellAddr = XLSX.utils.encode_cell({ r: 0, c: ci });
+        if (ws[cellAddr]) ws[cellAddr].s = headerStyle;
+    });
+
+    // データ行：ステータスに応じて行背景色
+    rows.forEach((row, ri) => {
+        const status = row[11];
+        const bgColor = status === '入院中' ? 'F0FDF4' : 'F9FAFB';
+        const stayDays = row[12];
+        const stayColor = stayDays >= 365 ? 'DC2626' : stayDays >= 180 ? 'EA580C' : stayDays >= 90 ? 'CA8A04' : '1D4ED8';
+
+        row.forEach((_, ci) => {
+            const cellAddr = XLSX.utils.encode_cell({ r: ri + 1, c: ci });
+            if (!ws[cellAddr]) return;
+            ws[cellAddr].s = {
+                fill: { fgColor: { rgb: bgColor } },
+                border: {
+                    top:    { style: 'thin', color: { rgb: 'E5E7EB' } },
+                    bottom: { style: 'thin', color: { rgb: 'E5E7EB' } },
+                    left:   { style: 'thin', color: { rgb: 'E5E7EB' } },
+                    right:  { style: 'thin', color: { rgb: 'E5E7EB' } }
+                },
+                // 入院日数列（index12）は色付き
+                ...(ci === 12 ? { font: { bold: true, color: { rgb: stayColor } } } : {})
+            };
+        });
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws, '患者データ');
+
+    // ===== シート2: チーム別集計 =====
+    const team1A = patients.filter(p => p.team === '1A');
+    const team1B = patients.filter(p => p.team === '1B');
+    const admitted1A = team1A.filter(p => p.status === '入院中').length;
+    const admitted1B = team1B.filter(p => p.status === '入院中').length;
+    const discharged1A = team1A.filter(p => p.status === '退院').length;
+    const discharged1B = team1B.filter(p => p.status === '退院').length;
+
+    const avgDays = (arr) => {
+        if (arr.length === 0) return 0;
+        const total = arr.reduce((s, p) => s + calculateAdmissionPeriod(p.admissionDate, p.dischargeDate || null), 0);
+        return Math.round(total / arr.length);
+    };
+
+    const summaryData = [
+        ['項目', 'チーム1A', 'チーム1B', '合計'],
+        ['総患者数', team1A.length, team1B.length, patients.length],
+        ['入院中', admitted1A, admitted1B, admitted1A + admitted1B],
+        ['退院', discharged1A, discharged1B, discharged1A + discharged1B],
+        ['平均入院日数（日）', avgDays(team1A), avgDays(team1B), avgDays(patients)],
+    ];
+
+    const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
+    ws2['!cols'] = [{wch:20},{wch:12},{wch:12},{wch:12}];
+
+    const summaryHeaderStyle = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '065F46' } },
+        alignment: { horizontal: 'center' }
+    };
+    ['A1','B1','C1','D1'].forEach(addr => {
+        if (ws2[addr]) ws2[addr].s = summaryHeaderStyle;
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws2, 'チーム別集計');
+
+    // ===== 出力 =====
+    const today = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `患者データ_${today}.xlsx`);
+    showNotification(`Excelファイルをエクスポートしました（${patients.length}件）`, 'success');
 }
 
 // ===============================
@@ -1368,6 +1532,7 @@ function setupTabs() {
             const tabId = btn.getAttribute('data-tab');
             document.getElementById(`${tabId}-tab`).classList.add('active');
             if (tabId === 'charts') updateCharts();
+            if (tabId === 'export') updateExportCount();
         });
     });
 }
@@ -1441,6 +1606,13 @@ function updateCharts() {
 document.addEventListener('DOMContentLoaded', () => {
     checkLoginStatus();
     setupTabs();
+    // エクスポートフィルター変更時に件数を更新
+    setTimeout(() => {
+        ['exportStatusFilter','exportTeamFilter','exportFormFilter'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', updateExportCount);
+        });
+    }, 500);
     
     // 今日の日付をデイリー記録にセット
     const today = new Date().toISOString().split('T')[0];

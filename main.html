@@ -929,25 +929,90 @@
         <!-- エクスポートタブ -->
         <div id="export-tab" class="tab-content">
             <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">データエクスポート</h2>
-                
-                <div class="mb-6">
-                    <p class="text-gray-600 mb-4">全患者データをCSV形式でエクスポートします。</p>
-                    <button onclick="exportCSV()" 
-                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                        <i class="fas fa-file-excel mr-2"></i>CSVファイルとしてエクスポート
-                    </button>
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">
+                    <i class="fas fa-file-download text-green-600 mr-2"></i>データエクスポート
+                </h2>
+
+                <!-- フィルター設定 -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
+                    <h3 class="font-semibold text-gray-700 mb-3"><i class="fas fa-filter mr-1"></i>エクスポート対象の絞り込み（任意）</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">ステータス</label>
+                            <select id="exportStatusFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="">すべて</option>
+                                <option value="入院中">入院中のみ</option>
+                                <option value="退院">退院のみ</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">チーム</label>
+                            <select id="exportTeamFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="">すべて</option>
+                                <option value="1A">チーム1A</option>
+                                <option value="1B">チーム1B</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">入院形態</label>
+                            <select id="exportFormFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="">すべて</option>
+                                <option value="任意入院">任意入院</option>
+                                <option value="医療保護入院">医療保護入院</option>
+                                <option value="措置入院">措置入院</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-sm text-gray-500">
+                        対象件数：<span id="exportCount" class="font-bold text-blue-600">-</span> 件
+                    </div>
                 </div>
 
+                <!-- エクスポートボタン群 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <!-- Excelエクスポート -->
+                    <div class="border-2 border-green-200 rounded-xl p-5 bg-green-50 hover:bg-green-100 transition-colors">
+                        <div class="flex items-center mb-3">
+                            <i class="fas fa-file-excel text-3xl text-green-600 mr-3"></i>
+                            <div>
+                                <div class="font-bold text-gray-800">Excelファイル（.xlsx）</div>
+                                <div class="text-xs text-gray-500">Microsoft Excel / Numbers で開ける</div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-3">書式付きのExcelファイルとして出力します。ヘッダーに色・罫線付き。</p>
+                        <button onclick="exportExcel()"
+                            class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors">
+                            <i class="fas fa-download mr-2"></i>Excelでダウンロード
+                        </button>
+                    </div>
+
+                    <!-- CSVエクスポート -->
+                    <div class="border-2 border-blue-200 rounded-xl p-5 bg-blue-50 hover:bg-blue-100 transition-colors">
+                        <div class="flex items-center mb-3">
+                            <i class="fas fa-file-csv text-3xl text-blue-600 mr-3"></i>
+                            <div>
+                                <div class="font-bold text-gray-800">CSVファイル（.csv）</div>
+                                <div class="text-xs text-gray-500">汎用テキスト形式、どのソフトでも開ける</div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-3">シンプルなCSV形式で出力します。インポートテンプレートとしても利用可。</p>
+                        <button onclick="exportCSV()"
+                            class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors">
+                            <i class="fas fa-download mr-2"></i>CSVでダウンロード
+                        </button>
+                    </div>
+                </div>
+
+                <!-- エクスポート内容説明 -->
                 <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-                    <h3 class="font-semibold text-blue-800 mb-2">エクスポート内容</h3>
-                    <ul class="text-sm text-blue-700 space-y-1">
-                        <li>• 患者番号、患者名、チーム</li>
-                        <li>• 生年月日、病名、主治医</li>
-                        <li>• 受け持ち看護師、入院日、退院日</li>
-                        <li>• 入院種別、入院形態</li>
-                        <li>• ステータス、入院期間</li>
-                    </ul>
+                    <h3 class="font-semibold text-blue-800 mb-2"><i class="fas fa-info-circle mr-1"></i>エクスポート内容</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-1 text-sm text-blue-700">
+                        <div>• 患者番号</div><div>• 患者名</div><div>• チーム</div>
+                        <div>• 生年月日</div><div>• 病名</div><div>• 主治医</div>
+                        <div>• 受け持ち看護師</div><div>• 入院日</div><div>• 退院日</div>
+                        <div>• 入院種別</div><div>• 入院形態</div><div>• ステータス</div>
+                        <div>• 入院日数</div><div>• 入院期間（年月日）</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1327,6 +1392,8 @@
     </div><!-- mainContent の終了 -->
 
     <!-- Firebase SDK -->
+    <!-- SheetJS (Excel出力用) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="main.js"></script>
