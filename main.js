@@ -703,20 +703,20 @@ function renderPatientsList() {
         return;
     }
     
-    let html = `<table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">患者番号</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">患者名</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">チーム</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">病名</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院種別</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院形態</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">主治医</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">受け持ちNS</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院日</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">退院日</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">入院日数</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ステータス</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+    let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">患者番号</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">患者名</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">操作</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">ステータス</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">チーム</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">病名</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">入院種別</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">入院形態</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">主治医</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">受け持ちNS</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">入院日</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">退院日</th>
+        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">入院日数</th>
     </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
     
     filteredPatients.forEach(patient => {
@@ -728,25 +728,36 @@ function renderPatientsList() {
         const stayNote = formatStayDaysNote(stayDays);
         const isAdmitted = patient.status === '入院中';
         html += `<tr class="hover:bg-gray-50">
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${patient.patientId}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.name}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${patient.team === '1A' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">${patient.team}</span></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.disease}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${typeColor}">${patient.admissionType}</span></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${formColor}">${patient.admissionForm}</span></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.primaryPhysician}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.assignedNurse || '-'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(patient.admissionDate)}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${patient.dischargeDate ? formatDate(patient.dischargeDate) : '<span class="text-gray-400">-</span>'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${stayColorClass}">
+            <td class="px-3 py-3 whitespace-nowrap font-medium text-gray-900">${patient.patientId}</td>
+            <td class="px-3 py-3 whitespace-nowrap font-semibold text-gray-900">${patient.name}</td>
+            <td class="px-3 py-3 whitespace-nowrap">
+                <div class="flex items-center gap-1">
+                    <button onclick="editPatient('${patient.id}')" title="編集"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">
+                        <i class="fas fa-edit"></i> 編集
+                    </button>
+                    <button onclick="printPatientChart('${patient.id}')" title="印刷"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100">
+                        <i class="fas fa-print"></i> 印刷
+                    </button>
+                    <button onclick="showDeleteModal('${patient.id}')" title="削除"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100">
+                        <i class="fas fa-trash"></i> 削除
+                    </button>
+                </div>
+            </td>
+            <td class="px-3 py-3 whitespace-nowrap"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">${patient.status}</span></td>
+            <td class="px-3 py-3 whitespace-nowrap"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${patient.team === '1A' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">${patient.team}</span></td>
+            <td class="px-3 py-3 text-gray-900">${patient.disease}</td>
+            <td class="px-3 py-3 whitespace-nowrap"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${typeColor}">${patient.admissionType}</span></td>
+            <td class="px-3 py-3 whitespace-nowrap"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${formColor}">${patient.admissionForm}</span></td>
+            <td class="px-3 py-3 whitespace-nowrap text-gray-900">${patient.primaryPhysician}</td>
+            <td class="px-3 py-3 whitespace-nowrap text-gray-900">${patient.assignedNurse || '-'}</td>
+            <td class="px-3 py-3 whitespace-nowrap text-gray-900">${formatDate(patient.admissionDate)}</td>
+            <td class="px-3 py-3 whitespace-nowrap text-gray-500">${patient.dischargeDate ? formatDate(patient.dischargeDate) : '<span class="text-gray-300">-</span>'}</td>
+            <td class="px-3 py-3 whitespace-nowrap font-bold ${stayColorClass}">
                 ${stayDays}日
                 <div class="text-xs font-normal text-gray-400">${stayNote}${isAdmitted ? '<span class="text-green-500 ml-1">経過中</span>' : ''}</div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">${patient.status}</span></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                <button onclick="editPatient('${patient.id}')" class="text-blue-600 hover:text-blue-900"><i class="fas fa-edit"></i> 編集</button>
-                <button onclick="printPatientChart('${patient.id}')" class="text-indigo-600 hover:text-indigo-900 ml-1"><i class="fas fa-print"></i> 印刷</button>
-                <button onclick="showDeleteModal('${patient.id}')" class="text-red-600 hover:text-red-900 hover:bg-red-50 border border-red-200 rounded px-2 py-1 ml-1 text-xs"><i class="fas fa-trash"></i> 削除</button>
             </td>
         </tr>`;
     });
